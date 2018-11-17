@@ -293,8 +293,6 @@ g_luks_crypto_run(struct g_luks_worker *wr, struct bio *bp)
 		crd->crd_skip = 0;
 		crd->crd_len = secsize;
 		crd->crd_flags = CRD_F_IV_EXPLICIT | CRD_F_IV_PRESENT;
-		if ((sc->sc_flags & G_LUKS_FLAG_SINGLE_KEY) == 0)
-			crd->crd_flags |= CRD_F_KEY_EXPLICIT;
 		if (bp->bio_cmd == BIO_WRITE)
 			crd->crd_flags |= CRD_F_ENCRYPT;
 		crd->crd_alg = sc->sc_ealgo;

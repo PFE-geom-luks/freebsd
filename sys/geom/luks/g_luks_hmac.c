@@ -129,10 +129,7 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
 {
 	uint8_t off[8];
 
-	if ((sc->sc_flags & G_LUKS_FLAG_NATIVE_BYTE_ORDER) != 0)
-		bcopy(&offset, off, sizeof(off));
-	else
-		le64enc(off, (uint64_t)offset);
+	le64enc(off, (uint64_t)offset);
 
 	switch (sc->sc_ealgo) {
 	case CRYPTO_AES_XTS:

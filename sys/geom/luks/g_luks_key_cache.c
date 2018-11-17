@@ -81,10 +81,7 @@ g_luks_key_fill(struct g_luks_softc *sc, struct g_luks_key *key, uint64_t keyno)
 		uint8_t keyno[8];
 	} __packed hmacdata;
 
-	if ((sc->sc_flags & G_LUKS_FLAG_ENC_IVKEY) != 0)
-		ekey = sc->sc_mkey;
-	else
-		ekey = sc->sc_ekey;
+	ekey = sc->sc_ekey;
 
 	bcopy("ekey", hmacdata.magic, 4);
 	le64enc(hmacdata.keyno, keyno);
@@ -186,50 +183,10 @@ g_luks_key_init(struct g_luks_softc *sc)
 	mtx_lock(&sc->sc_ekeys_lock);
 
 	mkey = sc->sc_mkey + sizeof(sc->sc_ivkey);
-	if ((sc->sc_flags & G_LUKS_FLAG_AUTH) == 0)
-		bcopy(mkey, sc->sc_ekey, G_LUKS_DATAKEYLEN);
-	else {
-		/*
-		 * The encryption key is: ekey = HMAC_SHA512(Data-Key, 0x10)
-		 */
-		g_luks_crypto_hmac(mkey, G_LUKS_MAXKEYLEN, "\x10", 1,
-		    sc->sc_ekey, 0);
-	}
+	bcopy(mkey, sc->sc_ekey, G_LUKS_DATAKEYLEN);
 
-	if ((sc->sc_flags & G_LUKS_FLAG_SINGLE_KEY) != 0) {
-		sc->sc_ekeys_total = 1;
-		sc->sc_ekeys_allocated = 0;
-	} else {
-		off_t mediasize;
-		size_t blocksize;
-
-		if ((sc->sc_flags & G_LUKS_FLAG_AUTH) != 0) {
-			struct g_provider *pp;
-
-			pp = LIST_FIRST(&sc->sc_geom->consumer)->provider;
-			mediasize = pp->mediasize;
-			blocksize = pp->sectorsize;
-		} else {
-			mediasize = sc->sc_mediasize;
-			blocksize = sc->sc_sectorsize;
-		}
-		sc->sc_ekeys_total =
-		    ((mediasize - 1) >> G_LUKS_KEY_SHIFT) / blocksize + 1;
-		sc->sc_ekeys_allocated = 0;
-		TAILQ_INIT(&sc->sc_ekeys_queue);
-		RB_INIT(&sc->sc_ekeys_tree);
-		if (sc->sc_ekeys_total <= g_luks_key_cache_limit) {
-			uint64_t keyno;
-
-			for (keyno = 0; keyno < sc->sc_ekeys_total; keyno++)
-				(void)g_luks_key_allocate(sc, keyno);
-			KASSERT(sc->sc_ekeys_total == sc->sc_ekeys_allocated,
-			    ("sc_ekeys_total=%ju != sc_ekeys_allocated=%ju",
-			    (uintmax_t)sc->sc_ekeys_total,
-			    (uintmax_t)sc->sc_ekeys_allocated));
-		}
-	}
-
+	sc->sc_ekeys_total = 1;
+	sc->sc_ekeys_allocated = 0;
 	mtx_unlock(&sc->sc_ekeys_lock);
 }
 
@@ -238,105 +195,19 @@ g_luks_key_destroy(struct g_luks_softc *sc)
 {
 
 	mtx_lock(&sc->sc_ekeys_lock);
-	if ((sc->sc_flags & G_LUKS_FLAG_SINGLE_KEY) != 0) {
-		bzero(sc->sc_ekey, sizeof(sc->sc_ekey));
-	} else {
-		struct g_luks_key *key;
-
-		while ((key = TAILQ_FIRST(&sc->sc_ekeys_queue)) != NULL)
-			g_luks_key_remove(sc, key);
-		TAILQ_INIT(&sc->sc_ekeys_queue);
-		RB_INIT(&sc->sc_ekeys_tree);
-	}
+	bzero(sc->sc_ekey, sizeof(sc->sc_ekey));
 	mtx_unlock(&sc->sc_ekeys_lock);
 }
 
-/*
- * Select encryption key. If G_LUKS_FLAG_SINGLE_KEY is present we only have one
- * key available for all the data. If the flag is not present select the key
- * based on data offset.
- */
 uint8_t *
 g_luks_key_hold(struct g_luks_softc *sc, off_t offset, size_t blocksize)
 {
-	struct g_luks_key *key, keysearch;
-	uint64_t keyno;
-
-	if ((sc->sc_flags & G_LUKS_FLAG_SINGLE_KEY) != 0)
-		return (sc->sc_ekey);
-
-	/* We switch key every 2^G_LUKS_KEY_SHIFT blocks. */
-	keyno = (offset >> G_LUKS_KEY_SHIFT) / blocksize;
-
-	KASSERT(keyno < sc->sc_ekeys_total,
-	    ("%s: keyno=%ju >= sc_ekeys_total=%ju",
-	    __func__, (uintmax_t)keyno, (uintmax_t)sc->sc_ekeys_total));
-
-	keysearch.gek_keyno = keyno;
-
-	if (sc->sc_ekeys_total == sc->sc_ekeys_allocated) {
-		/* We have all the keys, so avoid some overhead. */
-		key = RB_FIND(g_luks_key_tree, &sc->sc_ekeys_tree, &keysearch);
-		KASSERT(key != NULL, ("No key %ju found.", (uintmax_t)keyno));
-		KASSERT(key->gek_magic == G_LUKS_KEY_MAGIC,
-		    ("Invalid key magic."));
-		return (key->gek_key);
-	}
-
-	mtx_lock(&sc->sc_ekeys_lock);
-	key = RB_FIND(g_luks_key_tree, &sc->sc_ekeys_tree, &keysearch);
-	if (key != NULL) {
-		g_luks_key_cache_hits++;
-		TAILQ_REMOVE(&sc->sc_ekeys_queue, key, gek_next);
-		TAILQ_INSERT_TAIL(&sc->sc_ekeys_queue, key, gek_next);
-	} else {
-		/*
-		 * No key in cache, find the least recently unreferenced key
-		 * or allocate one if we haven't reached our limit yet.
-		 */
-		if (sc->sc_ekeys_allocated < g_luks_key_cache_limit) {
-			key = g_luks_key_allocate(sc, keyno);
-		} else {
-			g_luks_key_cache_misses++;
-			key = g_luks_key_find_last(sc);
-			if (key != NULL) {
-				g_luks_key_replace(sc, key, keyno);
-			} else {
-				/* All keys are referenced? Allocate one. */
-				key = g_luks_key_allocate(sc, keyno);
-			}
-		}
-	}
-	key->gek_count++;
-	mtx_unlock(&sc->sc_ekeys_lock);
-
-	KASSERT(key->gek_magic == G_LUKS_KEY_MAGIC, ("Invalid key magic."));
-
-	return (key->gek_key);
+	return (sc->sc_ekey);
 }
 
 void
 g_luks_key_drop(struct g_luks_softc *sc, uint8_t *rawkey)
 {
-	struct g_luks_key *key = (struct g_luks_key *)rawkey;
-
-	if ((sc->sc_flags & G_LUKS_FLAG_SINGLE_KEY) != 0)
-		return;
-
-	KASSERT(key->gek_magic == G_LUKS_KEY_MAGIC, ("Invalid key magic."));
-
-	if (sc->sc_ekeys_total == sc->sc_ekeys_allocated)
-		return;
-
-	mtx_lock(&sc->sc_ekeys_lock);
-	KASSERT(key->gek_count > 0, ("key->gek_count=%d", key->gek_count));
-	key->gek_count--;
-	while (sc->sc_ekeys_allocated > g_luks_key_cache_limit) {
-		key = g_luks_key_find_last(sc);
-		if (key == NULL)
-			break;
-		g_luks_key_remove(sc, key);
-	}
-	mtx_unlock(&sc->sc_ekeys_lock);
+	return;
 }
 #endif /* _KERNEL */

@@ -55,33 +55,15 @@
 #endif
 
 #define	G_LUKS_CLASS_NAME	"LUKS"
-#define	G_LUKS_MAGIC		"GEOM::LUKS"
+#define	G_LUKS_MAGIC		{'L','U','K','S', 0xba, 0xbe};
 #define	G_LUKS_SUFFIX		".luks"
 
 /*
  * Version history:
- * 0 - Initial version number.
- * 1 - Added data authentication support (md_aalgo field and
- *     G_LUKS_FLAG_AUTH flag).
- * 2 - Added G_LUKS_FLAG_READONLY.
- * 3 - Added 'configure' subcommand.
- * 4 - IV is generated from offset converted to little-endian
- *     (the G_LUKS_FLAG_NATIVE_BYTE_ORDER flag will be set for older versions).
- * 5 - Added multiple encrypton keys and AES-XTS support.
- * 6 - Fixed usage of multiple keys for authenticated providers (the
- *     G_LUKS_FLAG_FIRST_KEY flag will be set for older versions).
- * 7 - Encryption keys are now generated from the Data Key and not from the
- *     IV Key (the G_LUKS_FLAG_ENC_IVKEY flag will be set for older versions).
+ * 1 - As described by LUKS specification
  */
-#define	G_LUKS_VERSION_00	0
 #define	G_LUKS_VERSION_01	1
-#define	G_LUKS_VERSION_02	2
-#define	G_LUKS_VERSION_03	3
-#define	G_LUKS_VERSION_04	4
-#define	G_LUKS_VERSION_05	5
-#define	G_LUKS_VERSION_06	6
-#define	G_LUKS_VERSION_07	7
-#define	G_LUKS_VERSION		G_LUKS_VERSION_07
+#define	G_LUKS_VERSION		G_LUKS_VERSION_01
 
 /* ON DISK FLAGS. */
 /* Use random, onetime keys. */
@@ -92,8 +74,6 @@
 #define	G_LUKS_FLAG_WO_DETACH		0x00000004
 /* Detach on last close. */
 #define	G_LUKS_FLAG_RW_DETACH		0x00000008
-/* Provide data authentication. */
-#define	G_LUKS_FLAG_AUTH			0x00000010
 /* Provider is read-only, we should deny all write attempts. */
 #define	G_LUKS_FLAG_RO			0x00000020
 /* Don't pass through BIO_DELETE requests. */
@@ -107,17 +87,10 @@
 #define	G_LUKS_FLAG_WOPEN		0x00010000
 /* Destroy device. */
 #define	G_LUKS_FLAG_DESTROY		0x00020000
-/* Provider uses native byte-order for IV generation. */
-#define	G_LUKS_FLAG_NATIVE_BYTE_ORDER	0x00040000
-/* Provider uses single encryption key. */
-#define	G_LUKS_FLAG_SINGLE_KEY		0x00080000
 /* Device suspended. */
 #define	G_LUKS_FLAG_SUSPEND		0x00100000
 /* Provider uses first encryption key. */
 #define	G_LUKS_FLAG_FIRST_KEY		0x00200000
-/* Provider uses IV-Key for encryption key generation. */
-#define	G_LUKS_FLAG_ENC_IVKEY		0x00400000
-
 #define	G_LUKS_NEW_BIO	255
 
 #define	SHA512_MDLEN		64
@@ -242,9 +215,8 @@ struct g_luks_key {
 };
 
 struct g_luks_metadata {
-	char		md_magic[16];	/* Magic value. */
-	uint32_t	md_version;	/* Version number. */
-	uint32_t	md_flags;	/* Additional flags. */
+	char		md_magic[6];	/* Magic value. */
+	uint16_t	md_version;	/* Version number. */
 	uint16_t	md_ealgo;	/* Encryption algorithm. */
 	uint16_t	md_keylen;	/* Key length. */
 	uint16_t	md_aalgo;	/* Authentication algorithm. */
@@ -259,29 +231,11 @@ struct g_luks_metadata {
 } __packed;
 #ifndef _OpenSSL_
 static __inline void
-luks_metadata_encode_v0(struct g_luks_metadata *md, u_char **datap)
-{
-	u_char *p;
-
-	p = *datap;
-	le32enc(p, md->md_flags);	p += sizeof(md->md_flags);
-	le16enc(p, md->md_ealgo);	p += sizeof(md->md_ealgo);
-	le16enc(p, md->md_keylen);	p += sizeof(md->md_keylen);
-	le64enc(p, md->md_provsize);	p += sizeof(md->md_provsize);
-	le32enc(p, md->md_sectorsize);	p += sizeof(md->md_sectorsize);
-	*p = md->md_keys;		p += sizeof(md->md_keys);
-	le32enc(p, md->md_iterations);	p += sizeof(md->md_iterations);
-	bcopy(md->md_salt, p, sizeof(md->md_salt)); p += sizeof(md->md_salt);
-	bcopy(md->md_mkeys, p, sizeof(md->md_mkeys)); p += sizeof(md->md_mkeys);
-	*datap = p;
-}
-static __inline void
 luks_metadata_encode_v1v2v3v4v5v6v7(struct g_luks_metadata *md, u_char **datap)
 {
 	u_char *p;
 
 	p = *datap;
-	le32enc(p, md->md_flags);	p += sizeof(md->md_flags);
 	le16enc(p, md->md_ealgo);	p += sizeof(md->md_ealgo);
 	le16enc(p, md->md_keylen);	p += sizeof(md->md_keylen);
 	le16enc(p, md->md_aalgo);	p += sizeof(md->md_aalgo);
@@ -303,19 +257,10 @@ luks_metadata_encode(struct g_luks_metadata *md, u_char *data)
 	p = data;
 	bcopy(md->md_magic, p, sizeof(md->md_magic));
 	p += sizeof(md->md_magic);
-	le32enc(p, md->md_version);
+	le16enc(p, md->md_version);
 	p += sizeof(md->md_version);
 	switch (md->md_version) {
-	case G_LUKS_VERSION_00:
-		luks_metadata_encode_v0(md, &p);
-		break;
 	case G_LUKS_VERSION_01:
-	case G_LUKS_VERSION_02:
-	case G_LUKS_VERSION_03:
-	case G_LUKS_VERSION_04:
-	case G_LUKS_VERSION_05:
-	case G_LUKS_VERSION_06:
-	case G_LUKS_VERSION_07:
 		luks_metadata_encode_v1v2v3v4v5v6v7(md, &p);
 		break;
 	default:
@@ -332,31 +277,6 @@ luks_metadata_encode(struct g_luks_metadata *md, u_char *data)
 	bcopy(hash, md->md_hash, sizeof(md->md_hash));
 	bcopy(md->md_hash, p, sizeof(md->md_hash));
 }
-static __inline int
-luks_metadata_decode_v0(const u_char *data, struct g_luks_metadata *md)
-{
-	uint32_t hash[4];
-	MD5_CTX ctx;
-	const u_char *p;
-
-	p = data + sizeof(md->md_magic) + sizeof(md->md_version);
-	md->md_flags = le32dec(p);	p += sizeof(md->md_flags);
-	md->md_ealgo = le16dec(p);	p += sizeof(md->md_ealgo);
-	md->md_keylen = le16dec(p);	p += sizeof(md->md_keylen);
-	md->md_provsize = le64dec(p);	p += sizeof(md->md_provsize);
-	md->md_sectorsize = le32dec(p);	p += sizeof(md->md_sectorsize);
-	md->md_keys = *p;		p += sizeof(md->md_keys);
-	md->md_iterations = le32dec(p);	p += sizeof(md->md_iterations);
-	bcopy(p, md->md_salt, sizeof(md->md_salt)); p += sizeof(md->md_salt);
-	bcopy(p, md->md_mkeys, sizeof(md->md_mkeys)); p += sizeof(md->md_mkeys);
-	MD5Init(&ctx);
-	MD5Update(&ctx, data, p - data);
-	MD5Final((void *)hash, &ctx);
-	bcopy(hash, md->md_hash, sizeof(md->md_hash));
-	if (bcmp(md->md_hash, p, 16) != 0)
-		return (EINVAL);
-	return (0);
-}
 
 static __inline int
 luks_metadata_decode_v1v2v3v4v5v6v7(const u_char *data, struct g_luks_metadata *md)
@@ -366,7 +286,6 @@ luks_metadata_decode_v1v2v3v4v5v6v7(const u_char *data, struct g_luks_metadata *
 	const u_char *p;
 
 	p = data + sizeof(md->md_magic) + sizeof(md->md_version);
-	md->md_flags = le32dec(p);	p += sizeof(md->md_flags);
 	md->md_ealgo = le16dec(p);	p += sizeof(md->md_ealgo);
 	md->md_keylen = le16dec(p);	p += sizeof(md->md_keylen);
 	md->md_aalgo = le16dec(p);	p += sizeof(md->md_aalgo);
@@ -392,18 +311,9 @@ luks_metadata_decode(const u_char *data, struct g_luks_metadata *md)
 	bcopy(data, md->md_magic, sizeof(md->md_magic));
 	if (strcmp(md->md_magic, G_LUKS_MAGIC) != 0)
 		return (EINVAL);
-	md->md_version = le32dec(data + sizeof(md->md_magic));
+	md->md_version = le16dec(data + sizeof(md->md_magic));
 	switch (md->md_version) {
-	case G_LUKS_VERSION_00:
-		error = luks_metadata_decode_v0(data, md);
-		break;
 	case G_LUKS_VERSION_01:
-	case G_LUKS_VERSION_02:
-	case G_LUKS_VERSION_03:
-	case G_LUKS_VERSION_04:
-	case G_LUKS_VERSION_05:
-	case G_LUKS_VERSION_06:
-	case G_LUKS_VERSION_07:
 		error = luks_metadata_decode_v1v2v3v4v5v6v7(data, md);
 		break;
 	default:
@@ -504,11 +414,8 @@ luks_metadata_dump(const struct g_luks_metadata *md)
 
 	printf("     magic: %s\n", md->md_magic);
 	printf("   version: %u\n", (u_int)md->md_version);
-	printf("     flags: 0x%x\n", (u_int)md->md_flags);
 	printf("     ealgo: %s\n", g_luks_algo2str(md->md_ealgo));
 	printf("    keylen: %u\n", (u_int)md->md_keylen);
-	if (md->md_flags & G_LUKS_FLAG_AUTH)
-		printf("     aalgo: %s\n", g_luks_algo2str(md->md_aalgo));
 	printf("  provsize: %ju\n", (uintmax_t)md->md_provsize);
 	printf("sectorsize: %u\n", (u_int)md->md_sectorsize);
 	printf("      keys: 0x%02x\n", (u_int)md->md_keys);
@@ -614,49 +521,17 @@ luks_metadata_softc(struct g_luks_softc *sc, const struct g_luks_metadata *md,
 	sc->sc_version = md->md_version;
 	sc->sc_inflight = 0;
 	sc->sc_crypto = G_LUKS_CRYPTO_UNKNOWN;
-	sc->sc_flags = md->md_flags;
+	sc->sc_flags = 0x00000000;
 	/* Backward compatibility. */
-	if (md->md_version < G_LUKS_VERSION_04)
-		sc->sc_flags |= G_LUKS_FLAG_NATIVE_BYTE_ORDER;
-	if (md->md_version < G_LUKS_VERSION_05)
-		sc->sc_flags |= G_LUKS_FLAG_SINGLE_KEY;
-	if (md->md_version < G_LUKS_VERSION_06 &&
-	    (sc->sc_flags & G_LUKS_FLAG_AUTH) != 0) {
-		sc->sc_flags |= G_LUKS_FLAG_FIRST_KEY;
-	}
-	if (md->md_version < G_LUKS_VERSION_07)
-		sc->sc_flags |= G_LUKS_FLAG_ENC_IVKEY;
 	sc->sc_ealgo = md->md_ealgo;
 
-	if (sc->sc_flags & G_LUKS_FLAG_AUTH) {
-		sc->sc_akeylen = sizeof(sc->sc_akey) * 8;
-		sc->sc_aalgo = md->md_aalgo;
-		sc->sc_alen = g_luks_hashlen(sc->sc_aalgo);
-
-		sc->sc_data_per_sector = sectorsize - sc->sc_alen;
-		/*
-		 * Some hash functions (like SHA1 and RIPEMD160) generates hash
-		 * which length is not multiple of 128 bits, but we want data
-		 * length to be multiple of 128, so we can encrypt without
-		 * padding. The line below rounds down data length to multiple
-		 * of 128 bits.
-		 */
-		sc->sc_data_per_sector -= sc->sc_data_per_sector % 16;
-
-		sc->sc_bytes_per_sector =
-		    (md->md_sectorsize - 1) / sc->sc_data_per_sector + 1;
-		sc->sc_bytes_per_sector *= sectorsize;
-	}
 	sc->sc_sectorsize = md->md_sectorsize;
 	sc->sc_mediasize = mediasize;
 	if (!(sc->sc_flags & G_LUKS_FLAG_ONETIME))
 		sc->sc_mediasize -= sectorsize;
-	if (!(sc->sc_flags & G_LUKS_FLAG_AUTH))
-		sc->sc_mediasize -= (sc->sc_mediasize % sc->sc_sectorsize);
-	else {
-		sc->sc_mediasize /= sc->sc_bytes_per_sector;
-		sc->sc_mediasize *= sc->sc_sectorsize;
-	}
+
+	sc->sc_mediasize /= sc->sc_bytes_per_sector;
+	sc->sc_mediasize *= sc->sc_sectorsize;
 	sc->sc_ekeylen = md->md_keylen;
 }
 

@@ -135,10 +135,6 @@ g_luks_ctl_attach(struct gctl_req *req, struct g_class *mp)
 		gctl_error(req, "Options -d and -r are mutually exclusive.");
 		return;
 	}
-	if (*detach)
-		md.md_flags |= G_LUKS_FLAG_WO_DETACH;
-	if (*readonly)
-		md.md_flags |= G_LUKS_FLAG_RO;
 	g_luks_create(req, mp, pp, &md, mkey, nkey);
 	bzero(mkey, sizeof(mkey));
 	bzero(&md, sizeof(md));
@@ -253,45 +249,11 @@ g_luks_ctl_onetime(struct gctl_req *req, struct g_class *mp)
 
 	strlcpy(md.md_magic, G_LUKS_MAGIC, sizeof(md.md_magic));
 	md.md_version = G_LUKS_VERSION;
-	md.md_flags |= G_LUKS_FLAG_ONETIME;
 
 	detach = gctl_get_paraml(req, "detach", sizeof(*detach));
-	if (detach != NULL && *detach)
-		md.md_flags |= G_LUKS_FLAG_WO_DETACH;
 	notrim = gctl_get_paraml(req, "notrim", sizeof(*notrim));
-	if (notrim != NULL && *notrim)
-		md.md_flags |= G_LUKS_FLAG_NODELETE;
 
 	md.md_ealgo = CRYPTO_ALGORITHM_MIN - 1;
-	name = gctl_get_asciiparam(req, "aalgo");
-	if (name == NULL) {
-		gctl_error(req, "No '%s' argument.", "aalgo");
-		return;
-	}
-	if (*name != '\0') {
-		md.md_aalgo = g_luks_str2aalgo(name);
-		if (md.md_aalgo >= CRYPTO_ALGORITHM_MIN &&
-		    md.md_aalgo <= CRYPTO_ALGORITHM_MAX) {
-			md.md_flags |= G_LUKS_FLAG_AUTH;
-		} else {
-			/*
-			 * For backward compatibility, check if the -a option
-			 * was used to provide encryption algorithm.
-			 */
-			md.md_ealgo = g_luks_str2ealgo(name);
-			if (md.md_ealgo < CRYPTO_ALGORITHM_MIN ||
-			    md.md_ealgo > CRYPTO_ALGORITHM_MAX) {
-				gctl_error(req,
-				    "Invalid authentication algorithm.");
-				return;
-			} else {
-				gctl_error(req, "warning: The -e option, not "
-				    "the -a option is now used to specify "
-				    "encryption algorithm to use.");
-			}
-		}
-	}
-
 	if (md.md_ealgo < CRYPTO_ALGORITHM_MIN ||
 	    md.md_ealgo > CRYPTO_ALGORITHM_MAX) {
 		name = gctl_get_asciiparam(req, "ealgo");
@@ -537,34 +499,26 @@ g_luks_ctl_configure(struct gctl_req *req, struct g_class *mp)
 		}
 
 		if (*boot) {
-			md.md_flags |= G_LUKS_FLAG_BOOT;
 			sc->sc_flags |= G_LUKS_FLAG_BOOT;
 		} else if (*noboot) {
-			md.md_flags &= ~G_LUKS_FLAG_BOOT;
 			sc->sc_flags &= ~G_LUKS_FLAG_BOOT;
 		}
 
 		if (*notrim) {
-			md.md_flags |= G_LUKS_FLAG_NODELETE;
 			sc->sc_flags |= G_LUKS_FLAG_NODELETE;
 		} else if (*trim) {
-			md.md_flags &= ~G_LUKS_FLAG_NODELETE;
 			sc->sc_flags &= ~G_LUKS_FLAG_NODELETE;
 		}
 
 		if (*gluksboot) {
-			md.md_flags |= G_LUKS_FLAG_GLUKSBOOT;
 			sc->sc_flags |= G_LUKS_FLAG_GLUKSBOOT;
 		} else if (*nogluksboot) {
-			md.md_flags &= ~G_LUKS_FLAG_GLUKSBOOT;
 			sc->sc_flags &= ~G_LUKS_FLAG_GLUKSBOOT;
 		}
 
 		if (*displaypass) {
-			md.md_flags |= G_LUKS_FLAG_GLUKSDISPLAYPASS;
 			sc->sc_flags |= G_LUKS_FLAG_GLUKSDISPLAYPASS;
 		} else if (*nodisplaypass) {
-			md.md_flags &= ~G_LUKS_FLAG_GLUKSDISPLAYPASS;
 			sc->sc_flags &= ~G_LUKS_FLAG_GLUKSDISPLAYPASS;
 		}
 
@@ -1119,7 +1073,7 @@ g_luks_ctl_kill(struct gctl_req *req, struct g_class *mp)
 void
 g_luks_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 {
-	uint32_t *version;
+	uint16_t *version;
 
 	g_topology_assert();
 
@@ -1129,14 +1083,7 @@ g_luks_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 		return;
 	}
 	while (*version != G_LUKS_VERSION) {
-		if (G_LUKS_VERSION == G_LUKS_VERSION_06 &&
-		    *version == G_LUKS_VERSION_05) {
-			/* Compatible. */
-			break;
-		}
-		if (G_LUKS_VERSION == G_LUKS_VERSION_07 &&
-		    (*version == G_LUKS_VERSION_05 ||
-		     *version == G_LUKS_VERSION_06)) {
+		if (G_LUKS_VERSION == G_LUKS_VERSION_01) {
 			/* Compatible. */
 			break;
 		}

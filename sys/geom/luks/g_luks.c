@@ -373,11 +373,8 @@ g_luks_start(struct bio *bp)
 	bp->bio_pflags = G_LUKS_NEW_BIO;
 	switch (bp->bio_cmd) {
 	case BIO_READ:
-		if (!(sc->sc_flags & G_LUKS_FLAG_AUTH)) {
-			g_luks_crypto_read(sc, bp, 0);
-			break;
-		}
-		/* FALLTHROUGH */
+		g_luks_crypto_read(sc, bp, 0);
+		break;
 	case BIO_WRITE:
 		mtx_lock(&sc->sc_queue_mtx);
 		bioq_insert_tail(&sc->sc_queue, bp);
@@ -420,14 +417,6 @@ g_luks_newsession(struct g_luks_worker *wr)
 	} else {
 		crie.cri_key = sc->sc_ekey;
 	}
-	if (sc->sc_flags & G_LUKS_FLAG_AUTH) {
-		bzero(&cria, sizeof(cria));
-		cria.cri_alg = sc->sc_aalgo;
-		cria.cri_klen = sc->sc_akeylen;
-		cria.cri_key = sc->sc_akey;
-		crie.cri_next = &cria;
-	}
-
 	switch (sc->sc_crypto) {
 	case G_LUKS_CRYPTO_SW:
 		error = crypto_newsession(&wr->w_sid, &crie,
@@ -596,22 +585,12 @@ again:
 		mtx_unlock(&sc->sc_queue_mtx);
 		if (bp->bio_pflags == G_LUKS_NEW_BIO) {
 			bp->bio_pflags = 0;
-			if (sc->sc_flags & G_LUKS_FLAG_AUTH) {
-				if (bp->bio_cmd == BIO_READ)
-					g_luks_auth_read(sc, bp);
-				else
-					g_luks_auth_run(wr, bp);
-			} else {
-				if (bp->bio_cmd == BIO_READ)
-					g_luks_crypto_read(sc, bp, 1);
-				else
-					g_luks_crypto_run(wr, bp);
-			}
-		} else {
-			if (sc->sc_flags & G_LUKS_FLAG_AUTH)
-				g_luks_auth_run(wr, bp);
+			if (bp->bio_cmd == BIO_READ)
+				g_luks_crypto_read(sc, bp, 1);
 			else
 				g_luks_crypto_run(wr, bp);
+		} else {
+			g_luks_crypto_run(wr, bp);
 		}
 	}
 }
@@ -753,14 +732,7 @@ g_luks_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 	gp->spoiled = g_luks_orphan;
 	gp->orphan = g_luks_orphan;
 	gp->dumpconf = g_luks_dumpconf;
-	/*
-	 * If detach-on-last-close feature is not enabled and we don't operate
-	 * on read-only provider, we can simply use g_std_access().
-	 */
-	if (md->md_flags & (G_LUKS_FLAG_WO_DETACH | G_LUKS_FLAG_RO))
-		gp->access = g_luks_access;
-	else
-		gp->access = g_std_access;
+	gp->access = g_std_access;
 
 	luks_metadata_softc(sc, md, bpp->sectorsize, bpp->mediasize);
 	sc->sc_nkey = nkey;
@@ -871,8 +843,6 @@ g_luks_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 	G_LUKS_DEBUG(0, "Device %s created.", pp->name);
 	G_LUKS_DEBUG(0, "Encryption: %s %u", g_luks_algo2str(sc->sc_ealgo),
 	    sc->sc_ekeylen);
-	if (sc->sc_flags & G_LUKS_FLAG_AUTH)
-		G_LUKS_DEBUG(0, " Integrity: %s", g_luks_algo2str(sc->sc_aalgo));
 	G_LUKS_DEBUG(0, "    Crypto: %s",
 	    sc->sc_crypto == G_LUKS_CRYPTO_SW ? "software" : "hardware");
 	return (gp);
@@ -1062,9 +1032,6 @@ g_luks_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 	}
 	if (md.md_provsize != pp->mediasize)
 		return (NULL);
-	/* Should we attach it on boot? */
-	if (!(md.md_flags & G_LUKS_FLAG_BOOT))
-		return (NULL);
 	if (md.md_keys == 0x00) {
 		G_LUKS_DEBUG(0, "No valid keys on %s.", pp->name);
 		return (NULL);
@@ -1126,8 +1093,6 @@ g_luks_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
                         } else {
                                 printf("Enter passphrase for %s: ", pp->name);
 				showpass = g_luks_visible_passphrase;
-				if ((md.md_flags & G_LUKS_FLAG_GLUKSDISPLAYPASS) != 0)
-					showpass = GETS_ECHOPASS;
                                 cngets(passphrase, sizeof(passphrase),
 				    showpass);
                                 memcpy(cached_passphrase, passphrase,
@@ -1236,13 +1201,10 @@ g_luks_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
 	}								\
 } while (0)
 		ADD_FLAG(G_LUKS_FLAG_SUSPEND, "SUSPEND");
-		ADD_FLAG(G_LUKS_FLAG_SINGLE_KEY, "SINGLE-KEY");
-		ADD_FLAG(G_LUKS_FLAG_NATIVE_BYTE_ORDER, "NATIVE-BYTE-ORDER");
 		ADD_FLAG(G_LUKS_FLAG_ONETIME, "ONETIME");
 		ADD_FLAG(G_LUKS_FLAG_BOOT, "BOOT");
 		ADD_FLAG(G_LUKS_FLAG_WO_DETACH, "W-DETACH");
 		ADD_FLAG(G_LUKS_FLAG_RW_DETACH, "RW-DETACH");
-		ADD_FLAG(G_LUKS_FLAG_AUTH, "AUTH");
 		ADD_FLAG(G_LUKS_FLAG_WOPEN, "W-OPEN");
 		ADD_FLAG(G_LUKS_FLAG_DESTROY, "DESTROY");
 		ADD_FLAG(G_LUKS_FLAG_RO, "READ-ONLY");
@@ -1271,11 +1233,6 @@ g_luks_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
 		break;
 	}
 	sbuf_printf(sb, "</Crypto>\n");
-	if (sc->sc_flags & G_LUKS_FLAG_AUTH) {
-		sbuf_printf(sb,
-		    "%s<AuthenticationAlgorithm>%s</AuthenticationAlgorithm>\n",
-		    indent, g_luks_algo2str(sc->sc_aalgo));
-	}
 	sbuf_printf(sb, "%s<KeyLength>%u</KeyLength>\n", indent,
 	    sc->sc_ekeylen);
 	sbuf_printf(sb, "%s<EncryptionAlgorithm>%s</EncryptionAlgorithm>\n",

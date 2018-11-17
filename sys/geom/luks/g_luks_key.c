@@ -196,29 +196,11 @@ g_luks_mkey_propagate(struct g_luks_softc *sc, const unsigned char *mkey)
 	bcopy(mkey, sc->sc_ivkey, sizeof(sc->sc_ivkey));
 	mkey += sizeof(sc->sc_ivkey);
 
-	/*
-	 * The authentication key is: akey = HMAC_SHA512(Data-Key, 0x11)
-	 */
-	if ((sc->sc_flags & G_LUKS_FLAG_AUTH) != 0) {
-		g_luks_crypto_hmac(mkey, G_LUKS_MAXKEYLEN, "\x11", 1,
-		    sc->sc_akey, 0);
-	} else {
-		arc4rand(sc->sc_akey, sizeof(sc->sc_akey), 0);
-	}
+	arc4rand(sc->sc_akey, sizeof(sc->sc_akey), 0);
 
 	/* Initialize encryption keys. */
 	g_luks_key_init(sc);
 
-	if ((sc->sc_flags & G_LUKS_FLAG_AUTH) != 0) {
-		/*
-		 * Precalculate SHA256 for HMAC key generation.
-		 * This is expensive operation and we can do it only once now or
-		 * for every access to sector, so now will be much better.
-		 */
-		SHA256_Init(&sc->sc_akeyctx);
-		SHA256_Update(&sc->sc_akeyctx, sc->sc_akey,
-		    sizeof(sc->sc_akey));
-	}
 	/*
 	 * Precalculate SHA256 for IV generation.
 	 * This is expensive operation and we can do it only once now or for
