@@ -253,17 +253,17 @@ g_luks_ctl_onetime(struct gctl_req *req, struct g_class *mp)
 	detach = gctl_get_paraml(req, "detach", sizeof(*detach));
 	notrim = gctl_get_paraml(req, "notrim", sizeof(*notrim));
 
-	md.md_ealgo = CRYPTO_ALGORITHM_MIN - 1;
-	if (md.md_ealgo < CRYPTO_ALGORITHM_MIN ||
-	    md.md_ealgo > CRYPTO_ALGORITHM_MAX) {
+	md.md_ealgo = g_luks_str2ealgo(CRYPTO_ALGORITHM_MIN - 1);
+	if (g_luks_str2ealgo(md.md_ealgo) < CRYPTO_ALGORITHM_MIN ||
+	    g_luks_str2ealgo(md.md_ealgo) > CRYPTO_ALGORITHM_MAX) {
 		name = gctl_get_asciiparam(req, "ealgo");
 		if (name == NULL) {
 			gctl_error(req, "No '%s' argument.", "ealgo");
 			return;
 		}
-		md.md_ealgo = g_luks_str2ealgo(name);
-		if (md.md_ealgo < CRYPTO_ALGORITHM_MIN ||
-		    md.md_ealgo > CRYPTO_ALGORITHM_MAX) {
+		md.md_ealgo = name;
+		if (g_luks_str2ealgo(md.md_ealgo) < CRYPTO_ALGORITHM_MIN ||
+		    g_luks_str2ealgo(md.md_ealgo) > CRYPTO_ALGORITHM_MAX) {
 			gctl_error(req, "Invalid encryption algorithm.");
 			return;
 		}
@@ -274,7 +274,7 @@ g_luks_ctl_onetime(struct gctl_req *req, struct g_class *mp)
 		gctl_error(req, "No '%s' argument.", "keylen");
 		return;
 	}
-	md.md_keylen = g_luks_keylen(md.md_ealgo, *keylen);
+	md.md_keylen = g_luks_keylen(g_luks_str2ealgo(md.md_ealgo,md.md_emode), *keylen);
 	if (md.md_keylen == 0) {
 		gctl_error(req, "Invalid '%s' argument.", "keylen");
 		return;
@@ -629,7 +629,7 @@ g_luks_ctl_setkey(struct gctl_req *req, struct g_class *mp)
 	bcopy(sc->sc_mkey, mkeydst, sizeof(sc->sc_mkey));
 
 	/* Encrypt Master Key with the new key. */
-	error = g_luks_mkey_encrypt(md.md_ealgo, key, md.md_keylen, mkeydst);
+	error = g_luks_mkey_encrypt(g_luks_str2ealgo(md.md_ealgo), key, md.md_keylen, mkeydst);
 	bzero(key, keysize);
 	if (error != 0) {
 		bzero(&md, sizeof(md));

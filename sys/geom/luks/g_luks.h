@@ -215,43 +215,31 @@ struct g_luks_key {
 };
 
 struct g_luks_metadata {
-	char		md_magic[6];	/* Magic value. */
-	uint16_t	md_version;	/* Version number. */
-	uint16_t	md_ealgo;	/* Encryption algorithm. */
-	uint16_t	md_keylen;	/* Key length. */
-	uint16_t	md_aalgo;	/* Authentication algorithm. */
-	uint64_t	md_provsize;	/* Provider's size. */
-	uint32_t	md_sectorsize;	/* Sector size. */
-	uint8_t		md_keys;	/* Available keys. */
-	int32_t		md_iterations;	/* Number of iterations for PKCS#5v2. */
-	uint8_t		md_salt[G_LUKS_SALTLEN]; /* Salt. */
-			/* Encrypted master key (IV-key, Data-key, HMAC). */
-	uint8_t		md_mkeys[G_LUKS_MAXMKEYS * G_LUKS_MKEYLEN];
-	u_char		md_hash[16];	/* MD5 hash. */
+	char 				md_magic[LUKS_MAGIC_L];			/* Magic value. */
+	uint16_t			md_version;				/* Version number. */
+	char				md_ciphername[LUKS_CIPHERNAME_L];	/* Cipher name. */
+	char 				md_ciphermode[LUKS_CIPHERMODE_L];	/* Encryption algorithm. */
+	char				md_hashspec[LUKS_HASHSPEC_L];		/* Hash specification. */
+	uint32_t			md_payloadoffset;			/* Payload offset. */
+	uint32_t			md_keybytes;				/* Provider's size. */
+	char				md_mkdigest[LUKS_DIGESTSIZE];		/* Master key checksum from PKCS#5v2. */
+	char				md_mkdigestsalt[LUKS_SALTSIZE];		/* Salt parameter for master key PKCS#5v2. */
+	int32_t				md_iterations;				/* Number of iterations for PKCS#5v2. */
+	char 				md_uuid[UUID_STRING_L];			/* UUID of the partition */
+	struct {
+		uint32_t 	active;			/* State of keyslot enabled/disabled */
+		uint32_t 	iterations; 		/* Number of iterations for PKCS#5v2 */
+		char 		salt[LUKS_SALTSIZE];	/* Salt parameter for PKCS#5v2 */
+		uint32_t 	keymaterialoffset;	/* Start sector of key material */
+		uint32_t 	stripes;		/* number of anti-forensic stripes */
+	} md_keyslot[LUKS_NUMKEYS];			/* Key-slot */
 } __packed;
-#ifndef _OpenSSL_
-static __inline void
-luks_metadata_encode_v1v2v3v4v5v6v7(struct g_luks_metadata *md, u_char **datap)
-{
-	u_char *p;
 
-	p = *datap;
-	le16enc(p, md->md_ealgo);	p += sizeof(md->md_ealgo);
-	le16enc(p, md->md_keylen);	p += sizeof(md->md_keylen);
-	le16enc(p, md->md_aalgo);	p += sizeof(md->md_aalgo);
-	le64enc(p, md->md_provsize);	p += sizeof(md->md_provsize);
-	le32enc(p, md->md_sectorsize);	p += sizeof(md->md_sectorsize);
-	*p = md->md_keys;		p += sizeof(md->md_keys);
-	le32enc(p, md->md_iterations);	p += sizeof(md->md_iterations);
-	bcopy(md->md_salt, p, sizeof(md->md_salt)); p += sizeof(md->md_salt);
-	bcopy(md->md_mkeys, p, sizeof(md->md_mkeys)); p += sizeof(md->md_mkeys);
-	*datap = p;
-}
+#ifndef _OpenSSL_
+
 static __inline void
 luks_metadata_encode(struct g_luks_metadata *md, u_char *data)
 {
-	uint32_t hash[4];
-	MD5_CTX ctx;
 	u_char *p;
 
 	p = data;
@@ -261,7 +249,16 @@ luks_metadata_encode(struct g_luks_metadata *md, u_char *data)
 	p += sizeof(md->md_version);
 	switch (md->md_version) {
 	case G_LUKS_VERSION_01:
-		luks_metadata_encode_v1v2v3v4v5v6v7(md, &p);
+		bcopy(md->md_ciphername,p,sizeof(md->md_ciphername)); 	p += sizeof(md->md_ciphername);
+		bcopy(md->md_ciphermode,p,sizeof(md->md_ciphermode));	p += sizeof(md->md_ciphermode);
+		bcopy(md->md_hashspec,p,sizeof(md->md_hashspec));	p += sizeof(md->md_hashspec);
+		le32enc(p,md->md_payloadoffset);		p += sizeof(md->md_payloadoffset);
+		le32enc(p,md->md_keybytes);			p += sizeof(md->md_keybytes);
+		bcopy(md->md_mkdigest,p,sizeof(md->md_mkdigest));	p += sizeof(md->md_mkdigest);
+		bcopy(md->md_mkdigestsalt,p,sizeof(md->md_mkdigestsalt)); p += sizeof(md->md_mkdigestsalt);
+		le32enc(p,md->md_iterations);			p += sizeof(md->md_iterations);
+		bcopy(md->md_uuid,p,sizeof(md->md_uuid)); 	p += sizeof(md->md_uuid);
+		bcopy(md->md_keyslot,p,sizeof(md->md_keyslot));
 		break;
 	default:
 #ifdef _KERNEL
@@ -271,51 +268,45 @@ luks_metadata_encode(struct g_luks_metadata *md, u_char *data)
 		assert(!"Unsupported metadata version.");
 #endif
 	}
-	MD5Init(&ctx);
-	MD5Update(&ctx, data, p - data);
-	MD5Final((void *)hash, &ctx);
-	bcopy(hash, md->md_hash, sizeof(md->md_hash));
-	bcopy(md->md_hash, p, sizeof(md->md_hash));
 }
 
-static __inline int
-luks_metadata_decode_v1v2v3v4v5v6v7(const u_char *data, struct g_luks_metadata *md)
-{
-	uint32_t hash[4];
-	MD5_CTX ctx;
-	const u_char *p;
 
-	p = data + sizeof(md->md_magic) + sizeof(md->md_version);
-	md->md_ealgo = le16dec(p);	p += sizeof(md->md_ealgo);
-	md->md_keylen = le16dec(p);	p += sizeof(md->md_keylen);
-	md->md_aalgo = le16dec(p);	p += sizeof(md->md_aalgo);
-	md->md_provsize = le64dec(p);	p += sizeof(md->md_provsize);
-	md->md_sectorsize = le32dec(p);	p += sizeof(md->md_sectorsize);
-	md->md_keys = *p;		p += sizeof(md->md_keys);
-	md->md_iterations = le32dec(p);	p += sizeof(md->md_iterations);
-	bcopy(p, md->md_salt, sizeof(md->md_salt)); p += sizeof(md->md_salt);
-	bcopy(p, md->md_mkeys, sizeof(md->md_mkeys)); p += sizeof(md->md_mkeys);
-	MD5Init(&ctx);
-	MD5Update(&ctx, data, p - data);
-	MD5Final((void *)hash, &ctx);
-	bcopy(hash, md->md_hash, sizeof(md->md_hash));
-	if (bcmp(md->md_hash, p, 16) != 0)
-		return (EINVAL);
-	return (0);
-}
 static __inline int
 luks_metadata_decode(const u_char *data, struct g_luks_metadata *md)
 {
 	int error;
 
-	bcopy(data, md->md_magic, sizeof(md->md_magic));
+	const u_char *p;
+	unsigned int i;
+
+	p = data;
+
+	bcopy(p,md->md_magic,sizeof(md->md_magic)); p += sizeof(md->md_magic);
+	md->md_magic[LUKS_MAGIC_L - 1]='\0';
 	if (strcmp(md->md_magic, G_LUKS_MAGIC) != 0)
 		return (EINVAL);
-	md->md_version = le16dec(data + sizeof(md->md_magic));
+	md->md_version = le16dec(p); p += sizeof(md->md_version);
 	switch (md->md_version) {
 	case G_LUKS_VERSION_01:
-		error = luks_metadata_decode_v1v2v3v4v5v6v7(data, md);
-		break;
+
+		bcopy(p,md->md_ciphername,sizeof(md->md_ciphername)); 	p += sizeof(md->md_ciphername);
+		bcopy(p,md->md_ciphermode,sizeof(md->md_ciphermode));	p += sizeof(md->md_ciphermode);
+		bcopy(p,md->md_hashspec,sizeof(md->md_hashspec));	p += sizeof(md->md_hashspec);
+		md->md_payloadoffset = le32dec(p);		p += sizeof(md->md_payloadoffset);
+		md->md_keybytes = le32dec(p);			p += sizeof(md->md_keybytes);
+		bcopy(p,md->md_mkdigest,sizeof(md->md_mkdigest));	p += sizeof(md->md_mkdigest);
+		bcopy(p,md->md_mkdigestsalt,sizeof(md->md_mkdigestsalt)); p += sizeof(md->md_mkdigestsalt);
+		md->md_iterations = le32dec(p);			p += sizeof(md->md_iterations);
+		bcopy(p,md->md_uuid,sizeof(md->md_uuid)); 	p += sizeof(md->md_uuid);
+		bcopy(p,md->md_keyslot,sizeof(md->md_keyslot));
+		for ( i = 0 ; i < LUKS_NUMKEYS; i++){
+			md->md_keyslot[i].active = 	le32dec(md->md_keyslot[i].active);
+			md->md_keyslot[i].iterations = 	le32dec(md->md_keyslot[i].iterations);
+			md->md_keyslot[i].keymaterialoffset = le32dec(md->md_keyslot[i].keymaterialoffset);
+			md->md_keyslot[i].stripes = le32dec(md->md_keyslot[i].stripes);
+		}
+
+		error=0;
 	default:
 		error = EOPNOTSUPP;
 		break;
@@ -325,50 +316,13 @@ luks_metadata_decode(const u_char *data, struct g_luks_metadata *md)
 #endif	/* !_OpenSSL */
 
 static __inline u_int
-g_luks_str2ealgo(const char *name)
+g_luks_str2ealgo(const char *name, const char *mode)
 {
 
-	if (strcasecmp("null", name) == 0)
-		return (CRYPTO_NULL_CBC);
-	else if (strcasecmp("null-cbc", name) == 0)
-		return (CRYPTO_NULL_CBC);
-	else if (strcasecmp("aes", name) == 0)
-		return (CRYPTO_AES_XTS);
-	else if (strcasecmp("aes-cbc", name) == 0)
-		return (CRYPTO_AES_CBC);
-	else if (strcasecmp("aes-xts", name) == 0)
-		return (CRYPTO_AES_XTS);
-	else if (strcasecmp("blowfish", name) == 0)
-		return (CRYPTO_BLF_CBC);
-	else if (strcasecmp("blowfish-cbc", name) == 0)
-		return (CRYPTO_BLF_CBC);
-	else if (strcasecmp("camellia", name) == 0)
-		return (CRYPTO_CAMELLIA_CBC);
-	else if (strcasecmp("camellia-cbc", name) == 0)
-		return (CRYPTO_CAMELLIA_CBC);
-	else if (strcasecmp("3des", name) == 0)
-		return (CRYPTO_3DES_CBC);
-	else if (strcasecmp("3des-cbc", name) == 0)
-		return (CRYPTO_3DES_CBC);
-	return (CRYPTO_ALGORITHM_MIN - 1);
-}
-
-static __inline u_int
-g_luks_str2aalgo(const char *name)
-{
-
-	if (strcasecmp("hmac/md5", name) == 0)
-		return (CRYPTO_MD5_HMAC);
-	else if (strcasecmp("hmac/sha1", name) == 0)
-		return (CRYPTO_SHA1_HMAC);
-	else if (strcasecmp("hmac/ripemd160", name) == 0)
-		return (CRYPTO_RIPEMD160_HMAC);
-	else if (strcasecmp("hmac/sha256", name) == 0)
-		return (CRYPTO_SHA2_256_HMAC);
-	else if (strcasecmp("hmac/sha384", name) == 0)
-		return (CRYPTO_SHA2_384_HMAC);
-	else if (strcasecmp("hmac/sha512", name) == 0)
-		return (CRYPTO_SHA2_512_HMAC);
+	if (strcasecmp("aes", name) == 0){
+		if (strcasecmp("xts-plain64", mode) == 0)
+			return (CRYPTO_AES_XTS)
+	}
 	return (CRYPTO_ALGORITHM_MIN - 1);
 }
 
@@ -377,30 +331,8 @@ g_luks_algo2str(u_int algo)
 {
 
 	switch (algo) {
-	case CRYPTO_NULL_CBC:
-		return ("NULL");
-	case CRYPTO_AES_CBC:
-		return ("AES-CBC");
 	case CRYPTO_AES_XTS:
-		return ("AES-XTS");
-	case CRYPTO_BLF_CBC:
-		return ("Blowfish-CBC");
-	case CRYPTO_CAMELLIA_CBC:
-		return ("CAMELLIA-CBC");
-	case CRYPTO_3DES_CBC:
-		return ("3DES-CBC");
-	case CRYPTO_MD5_HMAC:
-		return ("HMAC/MD5");
-	case CRYPTO_SHA1_HMAC:
-		return ("HMAC/SHA1");
-	case CRYPTO_RIPEMD160_HMAC:
-		return ("HMAC/RIPEMD160");
-	case CRYPTO_SHA2_256_HMAC:
-		return ("HMAC/SHA256");
-	case CRYPTO_SHA2_384_HMAC:
-		return ("HMAC/SHA384");
-	case CRYPTO_SHA2_512_HMAC:
-		return ("HMAC/SHA512");
+		return ("aes-xts-plain");
 	}
 	return ("unknown");
 }
@@ -414,30 +346,7 @@ luks_metadata_dump(const struct g_luks_metadata *md)
 
 	printf("     magic: %s\n", md->md_magic);
 	printf("   version: %u\n", (u_int)md->md_version);
-	printf("     ealgo: %s\n", g_luks_algo2str(md->md_ealgo));
-	printf("    keylen: %u\n", (u_int)md->md_keylen);
-	printf("  provsize: %ju\n", (uintmax_t)md->md_provsize);
-	printf("sectorsize: %u\n", (u_int)md->md_sectorsize);
-	printf("      keys: 0x%02x\n", (u_int)md->md_keys);
-	printf("iterations: %d\n", (int)md->md_iterations);
-	bzero(str, sizeof(str));
-	for (i = 0; i < sizeof(md->md_salt); i++) {
-		str[i * 2] = hex[md->md_salt[i] >> 4];
-		str[i * 2 + 1] = hex[md->md_salt[i] & 0x0f];
-	}
-	printf("      Salt: %s\n", str);
-	bzero(str, sizeof(str));
-	for (i = 0; i < sizeof(md->md_mkeys); i++) {
-		str[i * 2] = hex[md->md_mkeys[i] >> 4];
-		str[i * 2 + 1] = hex[md->md_mkeys[i] & 0x0f];
-	}
-	printf("Master Key: %s\n", str);
-	bzero(str, sizeof(str));
-	for (i = 0; i < 16; i++) {
-		str[i * 2] = hex[md->md_hash[i] >> 4];
-		str[i * 2 + 1] = hex[md->md_hash[i] & 0x0f];
-	}
-	printf("  MD5 hash: %s\n", str);
+	printf("     ealgo: %s mode: %s\n", md->md_ealgo,md->md_emode);
 }
 
 static __inline u_int
@@ -445,26 +354,6 @@ g_luks_keylen(u_int algo, u_int keylen)
 {
 
 	switch (algo) {
-	case CRYPTO_NULL_CBC:
-		if (keylen == 0)
-			keylen = 64 * 8;
-		else {
-			if (keylen > 64 * 8)
-				keylen = 0;
-		}
-		return (keylen);
-	case CRYPTO_AES_CBC:
-	case CRYPTO_CAMELLIA_CBC:
-		switch (keylen) {
-		case 0:
-			return (128);
-		case 128:
-		case 192:
-		case 256:
-			return (keylen);
-		default:
-			return (0);
-		}
 	case CRYPTO_AES_XTS:
 		switch (keylen) {
 		case 0:
@@ -475,18 +364,6 @@ g_luks_keylen(u_int algo, u_int keylen)
 		default:
 			return (0);
 		}
-	case CRYPTO_BLF_CBC:
-		if (keylen == 0)
-			return (128);
-		if (keylen < 128 || keylen > 448)
-			return (0);
-		if ((keylen % 32) != 0)
-			return (0);
-		return (keylen);
-	case CRYPTO_3DES_CBC:
-		if (keylen == 0 || keylen == 192)
-			return (192);
-		return (0);
 	default:
 		return (0);
 	}
@@ -522,17 +399,11 @@ luks_metadata_softc(struct g_luks_softc *sc, const struct g_luks_metadata *md,
 	sc->sc_inflight = 0;
 	sc->sc_crypto = G_LUKS_CRYPTO_UNKNOWN;
 	sc->sc_flags = 0x00000000;
-	/* Backward compatibility. */
-	sc->sc_ealgo = md->md_ealgo;
 
-	sc->sc_sectorsize = md->md_sectorsize;
+	sc->sc_ealgo = g_luks_str2ealgo(md->md_ealgo,md->md_emode);
+
+	sc->sc_sectorsize = 512;
 	sc->sc_mediasize = mediasize;
-	if (!(sc->sc_flags & G_LUKS_FLAG_ONETIME))
-		sc->sc_mediasize -= sectorsize;
-
-	sc->sc_mediasize /= sc->sc_bytes_per_sector;
-	sc->sc_mediasize *= sc->sc_sectorsize;
-	sc->sc_ekeylen = md->md_keylen;
 }
 
 #ifdef _KERNEL

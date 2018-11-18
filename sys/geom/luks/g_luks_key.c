@@ -128,7 +128,7 @@ g_luks_mkey_decrypt(const struct g_luks_metadata *md, const unsigned char *key,
 		if (!(md->md_keys & bit))
 			continue;
 		bcopy(mmkey, tmpmkey, G_LUKS_MKEYLEN);
-		error = g_luks_crypto_decrypt(md->md_ealgo, tmpmkey,
+		error = g_luks_crypto_decrypt( g_luks_str2ealgo(md->md_ealgo), tmpmkey,
 		    G_LUKS_MKEYLEN, enckey, md->md_keylen);
 		if (error != 0) {
 			bzero(tmpmkey, sizeof(tmpmkey));
