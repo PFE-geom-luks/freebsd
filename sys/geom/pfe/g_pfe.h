@@ -124,10 +124,10 @@ pfe_metadata_decode(const u_char *data, struct g_pfe_metadata *md)
 	bcopy(p,md->md_uuid,sizeof(md->md_uuid)); 	p += sizeof(md->md_uuid);
 	bcopy(p,md->md_keyslot,sizeof(md->md_keyslot));
 	for ( i = 0 ; i < LUKS_NUMKEYS; i++){
-		md->md_keyslot[i].active = 	le32dec(md->md_keyslot[i].active);
-		md->md_keyslot[i].iterations = 	le32dec(md->md_keyslot[i].iterations);
-		md->md_keyslot[i].keymaterialoffset = le32dec(md->md_keyslot[i].keymaterialoffset);
-		md->md_keyslot[i].stripes = le32dec(md->md_keyslot[i].stripes);
+		md->md_keyslot[i].active = 	le32dec(p); p += sizeof(md->md_keyslot[i].active);
+		md->md_keyslot[i].iterations = 	le32dec(p); p += sizeof(md->md_keyslot[i].iterations);
+		md->md_keyslot[i].keymaterialoffset = le32dec(p); p += sizeof(md->md_keyslot[i].keymaterialoffset);
+		md->md_keyslot[i].stripes = le32dec(p); p+= sizeof(md->md_keyslot[i].stripes);
 	}
 
 	return (0);
@@ -136,15 +136,16 @@ pfe_metadata_decode(const u_char *data, struct g_pfe_metadata *md)
 static __inline void
 pfe_metadata_dump(const struct g_pfe_metadata *md){
 	printf(" magic: %s", md->md_magic);
+	printf(" version: %u", md->md_version);
 }
 
 static __inline void
 pfe_metadata_softc(struct g_pfe_softc *sc, const struct g_pfe_metadata *md)
 {
-	sc->sc_magic = md->md_magic;
+	bcopy(md->md_magic,sc->sc_magic,sizeof(md->md_magic));
 	sc->sc_version = md->md_version;
 }
 
-
-
+struct g_geom * g_pfe_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,const struct g_pfe_metadata *md);
+int g_pfe_read_metadata(struct g_class *mp, struct g_provider *pp, struct g_pfe_metadata *md);
 #endif	/* _G_PFE_H_ */

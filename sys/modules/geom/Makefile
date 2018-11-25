@@ -17,6 +17,7 @@ SUBDIR=	geom_bde \
 	geom_multipath \
 	geom_nop \
 	geom_part \
+	geom_pfe \
 	geom_raid \
 	geom_raid3 \
 	geom_sched \

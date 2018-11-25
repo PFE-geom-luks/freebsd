@@ -55,7 +55,7 @@
 #endif
 
 #define	G_LUKS_CLASS_NAME	"LUKS"
-#define	G_LUKS_MAGIC		{'L','U','K','S', 0xba, 0xbe};
+#define	G_LUKS_MAGIC		"LUKS\xba\xbe"
 #define	G_LUKS_SUFFIX		".luks"
 
 /*
@@ -113,6 +113,16 @@
 #define	G_LUKS_CRYPTO_UNKNOWN	0
 #define	G_LUKS_CRYPTO_HW		1
 #define	G_LUKS_CRYPTO_SW		2
+
+#define LUKS_MAGIC_L		6
+#define LUKS_CIPHERNAME_L 	32
+#define LUKS_CIPHERMODE_L 	32
+#define LUKS_HASHSPEC_L 	32
+#define UUID_STRING_L 		40
+#define LUKS_NUMKEYS 		8
+#define LUKS_DIGESTSIZE 	20
+#define LUKS_SALTSIZE 		32
+
 
 #ifdef _KERNEL
 #if (MAX_KEY_BYTES < G_LUKS_DATAIVKEYLEN)
@@ -300,12 +310,11 @@ luks_metadata_decode(const u_char *data, struct g_luks_metadata *md)
 		bcopy(p,md->md_uuid,sizeof(md->md_uuid)); 	p += sizeof(md->md_uuid);
 		bcopy(p,md->md_keyslot,sizeof(md->md_keyslot));
 		for ( i = 0 ; i < LUKS_NUMKEYS; i++){
-			md->md_keyslot[i].active = 	le32dec(md->md_keyslot[i].active);
-			md->md_keyslot[i].iterations = 	le32dec(md->md_keyslot[i].iterations);
-			md->md_keyslot[i].keymaterialoffset = le32dec(md->md_keyslot[i].keymaterialoffset);
-			md->md_keyslot[i].stripes = le32dec(md->md_keyslot[i].stripes);
+			md->md_keyslot[i].active = 	le32dec(p); p += sizeof(md->md_keyslot[i].active);
+			md->md_keyslot[i].iterations = 	le32dec(p); p += sizeof(md->md_keyslot[i].iterations);
+			md->md_keyslot[i].keymaterialoffset = le32dec(p); p += sizeof(md->md_keyslot[i].keymaterialoffset);
+			md->md_keyslot[i].stripes = le32dec(p); p+= sizeof(md->md_keyslot[i].stripes);
 		}
-
 		error=0;
 	default:
 		error = EOPNOTSUPP;
@@ -321,7 +330,7 @@ g_luks_str2ealgo(const char *name, const char *mode)
 
 	if (strcasecmp("aes", name) == 0){
 		if (strcasecmp("xts-plain64", mode) == 0)
-			return (CRYPTO_AES_XTS)
+			return (CRYPTO_AES_XTS);
 	}
 	return (CRYPTO_ALGORITHM_MIN - 1);
 }
@@ -340,13 +349,9 @@ g_luks_algo2str(u_int algo)
 static __inline void
 luks_metadata_dump(const struct g_luks_metadata *md)
 {
-	static const char hex[] = "0123456789abcdef";
-	char str[sizeof(md->md_mkeys) * 2 + 1];
-	u_int i;
-
 	printf("     magic: %s\n", md->md_magic);
 	printf("   version: %u\n", (u_int)md->md_version);
-	printf("     ealgo: %s mode: %s\n", md->md_ealgo,md->md_emode);
+	printf("     ealgo: %s mode: %s\n", md->md_ciphername,md->md_ciphermode);
 }
 
 static __inline u_int
@@ -400,7 +405,7 @@ luks_metadata_softc(struct g_luks_softc *sc, const struct g_luks_metadata *md,
 	sc->sc_crypto = G_LUKS_CRYPTO_UNKNOWN;
 	sc->sc_flags = 0x00000000;
 
-	sc->sc_ealgo = g_luks_str2ealgo(md->md_ealgo,md->md_emode);
+	sc->sc_ealgo = g_luks_str2ealgo(md->md_ciphername,md->md_ciphermode);
 
 	sc->sc_sectorsize = 512;
 	sc->sc_mediasize = mediasize;

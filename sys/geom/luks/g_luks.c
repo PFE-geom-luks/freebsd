@@ -401,7 +401,7 @@ static int
 g_luks_newsession(struct g_luks_worker *wr)
 {
 	struct g_luks_softc *sc;
-	struct cryptoini crie, cria;
+	struct cryptoini crie;
 	int error;
 
 	sc = wr->w_softc;
@@ -1030,12 +1030,6 @@ g_luks_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 		    pp->name);
 		return (NULL);
 	}
-	if (md.md_provsize != pp->mediasize)
-		return (NULL);
-	if (md.md_keys == 0x00) {
-		G_LUKS_DEBUG(0, "No valid keys on %s.", pp->name);
-		return (NULL);
-	}
 	if (md.md_iterations == -1) {
 		/* If there is no passphrase, we try only once. */
 		tries = 1;
@@ -1104,16 +1098,16 @@ g_luks_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
                  * Prepare Derived-Key from the user passphrase.
                  */
                 if (md.md_iterations == 0) {
-                        g_luks_crypto_hmac_update(&ctx, md.md_salt,
-                            sizeof(md.md_salt));
+                        g_luks_crypto_hmac_update(&ctx, md.md_mkdigestsalt,
+                            sizeof(md.md_mkdigestsalt));
                         g_luks_crypto_hmac_update(&ctx, passphrase,
                             strlen(passphrase));
                         explicit_bzero(passphrase, sizeof(passphrase));
                 } else if (md.md_iterations > 0) {
                         u_char dkey[G_LUKS_USERKEYLEN];
 
-                        pkcs5v2_genkey(dkey, sizeof(dkey), md.md_salt,
-                            sizeof(md.md_salt), passphrase, md.md_iterations);
+                        pkcs5v2_genkey(dkey, sizeof(dkey), md.md_mkdigestsalt,
+                            sizeof(md.md_mkdigestsalt), passphrase, md.md_iterations);
                         bzero(passphrase, sizeof(passphrase));
                         g_luks_crypto_hmac_update(&ctx, dkey, sizeof(dkey));
                         explicit_bzero(dkey, sizeof(dkey));

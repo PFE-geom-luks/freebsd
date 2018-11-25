@@ -39,12 +39,13 @@ __FBSDID("$FreeBSD$");
 #include <sys/sbuf.h>
 #include <sys/sysctl.h>
 #include <sys/malloc.h>
+#include <sys/endian.h>
 #include <geom/geom.h>
 #include <geom/pfe/g_pfe.h>
 
 
 SYSCTL_DECL(_kern_geom);
-MALLOC_DEFINE(M_ELI, "eli data", "GEOM_ELI Data");
+MALLOC_DEFINE(M_PFE, "pfe data", "GEOM_PFE Data");
 static SYSCTL_NODE(_kern_geom, OID_AUTO, pfe, CTLFLAG_RW, 0, "GEOM_PFE stuff");
 static u_int g_pfe_debug = 0;
 SYSCTL_UINT(_kern_geom_pfe, OID_AUTO, debug, CTLFLAG_RW, &g_pfe_debug, 0,
@@ -65,6 +66,13 @@ struct g_class g_pfe_class = {
 	.destroy_geom = g_pfe_destroy_geom
 };
 
+static void
+g_pfe_orphan_spoil_assert(struct g_consumer *cp)
+{
+
+	panic("Function %s() called for %s.", __func__, cp->geom->name);
+}
+
 
 static void
 g_pfe_orphan(struct g_consumer *cp)
@@ -81,6 +89,7 @@ g_pfe_start(struct bio *bp)
 	struct g_provider *pp;
 	struct bio *cbp;
 	u_int failprob = 0;
+	int error = 0;
 
 	gp = bp->bio_to->geom;
 	sc = gp->softc;
@@ -89,8 +98,8 @@ g_pfe_start(struct bio *bp)
 		u_int rval;
 		rval = arc4random() % 100;
 		if (rval < failprob) {
-			G_PFE_LOGREQLVL(1, bp, "Returning error=%d.", sc->sc_error);
-			g_io_deliver(bp, sc->sc_error);
+			G_PFE_LOGREQLVL(1, bp, "Returning error=%d.", error);
+			g_io_deliver(bp, error);
 			return;
 		}
 	}
@@ -100,7 +109,7 @@ g_pfe_start(struct bio *bp)
 		return;
 	}
 	cbp->bio_done = g_std_done;
-	cbp->bio_offset = bp->bio_offset + sc->sc_offset;
+	cbp->bio_offset = bp->bio_offset;
 	pp = LIST_FIRST(&gp->provider);
 	KASSERT(pp != NULL, ("NULL pp"));
 	cbp->bio_to = pp;
@@ -131,7 +140,6 @@ g_pfe_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 	struct g_geom *gp;
 	struct g_provider *pp;
 	struct g_consumer *cp;
-	u_int i;
 	int error;
 
 	G_PFE_DEBUG(1, "Creating device %s%s.", bpp->name, G_PFE_SUFFIX);
@@ -151,7 +159,7 @@ g_pfe_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 	gp->softc = sc;
 	sc->sc_geom = gp;
 
-	bioq_init(&sc->sc_queue);
+	
 	pp = NULL;
 	cp = g_new_consumer(gp);
 	error = g_attach(cp, bpp);
@@ -172,7 +180,7 @@ g_pfe_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 			gctl_error(req, "Cannot access %s (error=%d).",
 			    bpp->name, error);
 		} else {
-			G_ELI_DEBUG(1, "Cannot access %s (error=%d).",
+			G_PFE_DEBUG(1, "Cannot access %s (error=%d).",
 			    bpp->name, error);
 		}
 		goto failed;
@@ -180,9 +188,6 @@ g_pfe_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 
 
 	pp = g_new_providerf(gp, "%s%s", bpp->name, G_PFE_SUFFIX);
-	pp->mediasize = sc->sc_mediasize;
-	pp->sectorsize = sc->sc_sectorsize;
-
 	g_error_provider(pp, 0);
 
 	G_PFE_DEBUG(0, "Device %s created.", pp->name);
@@ -191,12 +196,10 @@ failed:
 	if (cp->provider != NULL)
 		g_detach(cp);
 	g_destroy_consumer(cp);
-	g_destroy_provider(newpp);
-	mtx_destroy(&sc->sc_lock);
-	free(sc->sc_physpath, M_GEOM);
+	g_destroy_provider(pp);
 	g_free(gp->softc);
 	g_destroy_geom(gp);
-	return (error);
+	return (NULL);
 }
 
 static int
@@ -239,8 +242,11 @@ static void
 g_pfe_ctl_create(struct gctl_req *req, struct g_class *mp)
 {
 	struct g_provider *pp;
+	struct g_pfe_metadata *md;
 	int i, *nargs;
 	intmax_t *error;
+	char param[16];
+	const char *name;
 
 	g_topology_assert();
 
@@ -258,8 +264,6 @@ g_pfe_ctl_create(struct gctl_req *req, struct g_class *mp)
 		gctl_error(req, "No '%s' argument", "error");
 		return;
 	}
-	physpath = gctl_get_asciiparam(req, "physpath");
-
 	for (i = 0; i < *nargs; i++) {
 		snprintf(param, sizeof(param), "arg%d", i);
 		name = gctl_get_asciiparam(req, param);
@@ -275,7 +279,7 @@ g_pfe_ctl_create(struct gctl_req *req, struct g_class *mp)
 			gctl_error(req, "Provider %s is invalid.", name);
 			return;
 		}
-		if (g_pfe_create(req, mp, pp,physpath) != 0) {
+		if (g_pfe_create(req, mp, pp, md) != 0) {
 			return;
 		}
 	}
@@ -287,7 +291,9 @@ g_pfe_ctl_configure(struct gctl_req *req, struct g_class *mp)
 	struct g_pfe_softc *sc;
 	struct g_provider *pp;
 	int i, *nargs;
+	char param[16];
 	intmax_t *error;
+	const char *name;
 
 	g_topology_assert();
 
@@ -322,12 +328,6 @@ g_pfe_ctl_configure(struct gctl_req *req, struct g_class *mp)
 			return;
 		}
 		sc = pp->geom->softc;
-		if (*error != -1)
-			sc->sc_error = (int)*error;
-		if (*rfailprob != -1)
-			sc->sc_rfailprob = (u_int)*rfailprob;
-		if (*wfailprob != -1)
-			sc->sc_wfailprob = (u_int)*wfailprob;
 	}
 }
 
@@ -348,6 +348,8 @@ g_pfe_ctl_destroy(struct gctl_req *req, struct g_class *mp)
 {
 	int *nargs, *force, error, i;
 	struct g_geom *gp;
+	const char *name;
+	char param[16];
 
 	g_topology_assert();
 
@@ -391,8 +393,6 @@ g_pfe_ctl_destroy(struct gctl_req *req, struct g_class *mp)
 }
 
 static void
-
-static void
 g_pfe_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 {
 	uint32_t *version;
@@ -434,7 +434,7 @@ g_pfe_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
 	sc = gp->softc;
 	sbuf_printf(sb, "%s<magic>%s</magic>\n", indent,
 	    sc->sc_magic);
-	sbuf_printf(sb, "%s<version>%ju</version>\n", indent,sc->sc_version);
+	sbuf_printf(sb, "%s<version>%hu</version>\n", indent,sc->sc_version);
 }
 
 
@@ -487,19 +487,6 @@ end:
 	g_destroy_consumer(cp);
 	g_destroy_geom(gp);
 	return (error);
-}
-
-
-static void
-g_pfe_orphan(struct g_consumer *cp)
-{
-	struct g_pfe_softc *sc;
-
-	g_topology_assert();
-	sc = cp->geom->softc;
-	if (sc == NULL)
-		return;
-	g_pfe_destroy(sc,TRUE);
 }
 
 

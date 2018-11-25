@@ -103,7 +103,7 @@ g_luks_ctl_attach(struct gctl_req *req, struct g_class *mp)
 		    name, error);
 		return;
 	}
-	if (md.md_keys == 0x00) {
+	if (md.md_keyslot == 0x00) {
 		bzero(&md, sizeof(md));
 		gctl_error(req, "No valid keys on %s.", pp->name);
 		return;
@@ -253,39 +253,27 @@ g_luks_ctl_onetime(struct gctl_req *req, struct g_class *mp)
 	detach = gctl_get_paraml(req, "detach", sizeof(*detach));
 	notrim = gctl_get_paraml(req, "notrim", sizeof(*notrim));
 
-	md.md_ealgo = g_luks_str2ealgo(CRYPTO_ALGORITHM_MIN - 1);
-	if (g_luks_str2ealgo(md.md_ealgo) < CRYPTO_ALGORITHM_MIN ||
-	    g_luks_str2ealgo(md.md_ealgo) > CRYPTO_ALGORITHM_MAX) {
+	bcopy("aes",md.md_ciphername,sizeof("aes"));
+	bcopy("xts-plain",md.md_ciphermode,sizeof("xts-plain"));
+	if (g_luks_str2ealgo(md.md_ciphername,md.md_ciphermode) < CRYPTO_ALGORITHM_MIN ||
+	    g_luks_str2ealgo(md.md_ciphername,md.md_ciphermode) > CRYPTO_ALGORITHM_MAX) {
 		name = gctl_get_asciiparam(req, "ealgo");
 		if (name == NULL) {
 			gctl_error(req, "No '%s' argument.", "ealgo");
 			return;
 		}
-		md.md_ealgo = name;
-		if (g_luks_str2ealgo(md.md_ealgo) < CRYPTO_ALGORITHM_MIN ||
-		    g_luks_str2ealgo(md.md_ealgo) > CRYPTO_ALGORITHM_MAX) {
+		bcopy(name,md.md_ciphername,sizeof(name));
+		if (g_luks_str2ealgo(md.md_ciphername,md.md_ciphermode) < CRYPTO_ALGORITHM_MIN ||
+		    g_luks_str2ealgo(md.md_ciphername,md.md_ciphermode) > CRYPTO_ALGORITHM_MAX) {
 			gctl_error(req, "Invalid encryption algorithm.");
 			return;
 		}
 	}
 
-	keylen = gctl_get_paraml(req, "keylen", sizeof(*keylen));
-	if (keylen == NULL) {
-		gctl_error(req, "No '%s' argument.", "keylen");
-		return;
-	}
-	md.md_keylen = g_luks_keylen(g_luks_str2ealgo(md.md_ealgo,md.md_emode), *keylen);
-	if (md.md_keylen == 0) {
-		gctl_error(req, "Invalid '%s' argument.", "keylen");
-		return;
-	}
-
 	/* Not important here. */
-	md.md_provsize = 0;
-	/* Not important here. */
-	bzero(md.md_salt, sizeof(md.md_salt));
+	bzero(md.md_mkdigestsalt, sizeof(md.md_mkdigestsalt));
 
-	md.md_keys = 0x01;
+	md.md_keyslot = 0x01;
 	arc4rand(mkey, sizeof(mkey), 0);
 
 	/* Not important here. */
@@ -629,7 +617,7 @@ g_luks_ctl_setkey(struct gctl_req *req, struct g_class *mp)
 	bcopy(sc->sc_mkey, mkeydst, sizeof(sc->sc_mkey));
 
 	/* Encrypt Master Key with the new key. */
-	error = g_luks_mkey_encrypt(g_luks_str2ealgo(md.md_ealgo), key, md.md_keylen, mkeydst);
+	error = g_luks_mkey_encrypt(g_luks_str2ealgo(md.md_ciphername,md.md_ciphermode), key, md.md_keylen, mkeydst);
 	bzero(key, keysize);
 	if (error != 0) {
 		bzero(&md, sizeof(md));

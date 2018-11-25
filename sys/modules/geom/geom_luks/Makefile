@@ -7,7 +7,6 @@ SRCS=	g_luks.c
 SRCS+=	g_luks_crypto.c
 SRCS+=	g_luks_ctl.c
 SRCS+=	g_luks_hmac.c
-SRCS+=	g_luks_integrity.c
 SRCS+=	g_luks_key.c
 SRCS+=	g_luks_key_cache.c
 SRCS+=	g_luks_privacy.c
