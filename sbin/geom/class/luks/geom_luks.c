@@ -1777,7 +1777,7 @@ luks_dump(struct gctl_req *req)
 
 static int
 luks_metadata_raw_read(struct gctl_req *req, const char *prov,
-    struct g_luks_metadata *md)
+    struct g_luks_metadata_raw *md)
 {
 	unsigned char sector[sizeof(struct g_luks_metadata)];
 	int error;
@@ -1799,6 +1799,7 @@ luks_metadata_raw_read(struct gctl_req *req, const char *prov,
 			return (-1);
 		}
 		close(fd);
+	}
 	error = luks_metadata_raw_decode(sector, md);
 	switch (error) {
 	case 0:
@@ -1825,7 +1826,7 @@ luks_metadata_raw_read(struct gctl_req *req, const char *prov,
 static void
 luks_dump_raw(struct gctl_req *req)
 {
-	struct g_luks_metadata md;
+	struct g_luks_metadata_raw md;
 	const char *name;
 	int i, nargs;
 

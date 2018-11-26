@@ -180,9 +180,13 @@ luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 	return (error);
 }
 
+#endif
+
 static __inline void
 luks_metadata_raw_dump(const struct g_luks_metadata_raw *md)
 {
 	printf("     magic: %s\n", md->md_magic);
 	printf("   version: %u\n", (u_int)md->md_version);
 }
+
+#endif
