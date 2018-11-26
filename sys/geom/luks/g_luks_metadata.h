@@ -185,8 +185,16 @@ luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 static __inline void
 luks_metadata_raw_dump(const struct g_luks_metadata_raw *md)
 {
-	printf("     magic: %s\n", md->md_magic);
-	printf("   version: %u\n", (u_int)md->md_version);
+	printf("        magic: %s\n", md->md_magic);
+	printf("      version: %u\n", (u_int)md->md_version);
+	printf("   ciphername: %s\n", md->md_ciphername);
+	printf("   ciphermode: %s\n", md->md_ciphermode);
+	printf("     hashspec: %s\n", md->md_hashspec);
+	printf("payloadoffset: %u\n", md->md_payloadoffset);
+	printf("     keybytes: %u\n", md->md_keybytes);
+	printf("     mkdigest: %s\n", md->md_mkdigest);
+	printf(" mkdigestsalt: %s\n", md->md_mkdigestsalt);
+	printf("         UUID: %s\n", md->md_uuid);
 }
 
 #endif
