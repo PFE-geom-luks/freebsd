@@ -94,7 +94,7 @@ struct g_luks_metadata_raw {
 #ifndef _OpenSSL_
 
 static __inline void
-luks_metadata_encode(struct g_luks_metadata_raw *md, u_char *data)
+luks_metadata_raw_encode(struct g_luks_metadata_raw *md, u_char *data)
 {
 	u_char *p;
 
@@ -128,7 +128,7 @@ luks_metadata_encode(struct g_luks_metadata_raw *md, u_char *data)
 
 
 static __inline int
-luks_metadata_decode(const u_char *data, struct g_luks_metadata_raw *md)
+luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 {
 	int error;
 
@@ -180,3 +180,9 @@ luks_metadata_decode(const u_char *data, struct g_luks_metadata_raw *md)
 	return (error);
 }
 
+static __inline void
+luks_metadata_raw_dump(const struct g_luks_metadata_raw *md)
+{
+	printf("     magic: %s\n", md->md_magic);
+	printf("   version: %u\n", (u_int)md->md_version);
+}

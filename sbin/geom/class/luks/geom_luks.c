@@ -77,6 +77,7 @@ static void luks_resize(struct gctl_req *req);
 static void luks_version(struct gctl_req *req);
 static void luks_clear(struct gctl_req *req);
 static void luks_dump(struct gctl_req *req);
+static void luks_dump_raw(struct gctl_req *req);
 
 static int luks_backup_create(struct gctl_req *req, const char *prov,
     const char *file);
@@ -102,6 +103,7 @@ static int luks_backup_create(struct gctl_req *req, const char *prov,
  * version [prov ...]
  * clear [-v] prov ...
  * dump [-v] prov ...
+ * dump_raw [-v] prov ...
  */
 struct g_command class_commands[] = {
 	{ "init", G_FLAG_VERBOSE, luks_main,
@@ -268,6 +270,9 @@ struct g_command class_commands[] = {
 	{ "dump", G_FLAG_VERBOSE, luks_main, G_NULL_OPTS,
 	    "[-v] prov ..."
 	},
+	{ "dump_raw", G_FLAG_VERBOSE, luks_main, G_NULL_OPTS,
+	    "[-v] prov ..."
+	},
 	G_CMD_SENTINEL
 };
 
@@ -336,6 +341,8 @@ luks_main(struct gctl_req *req, unsigned int flags)
 		luks_version(req);
 	else if (strcmp(name, "dump") == 0)
 		luks_dump(req);
+	else if (strcmp(name, "dump_raw") == 0)
+		luks_dump_raw(req);
 	else if (strcmp(name, "clear") == 0)
 		luks_clear(req);
 	else
@@ -1762,6 +1769,79 @@ luks_dump(struct gctl_req *req)
 		}
 		printf("Metadata on %s:\n", name);
 		luks_metadata_dump(&md);
+		printf("\n");
+	}
+}
+
+
+static int
+luks_metadata_raw_read(struct gctl_req *req, const char *prov,
+    struct g_luks_metadata *md)
+{
+	unsigned char sector[sizeof(struct g_luks_metadata)];
+	int error;
+
+	if (g_get_sectorsize(prov) == 0) {
+		int fd;
+
+		/* This is a file probably. */
+		fd = open(prov, O_RDONLY);
+		if (fd == -1) {
+			gctl_error(req, "Cannot open %s: %s.", prov,
+			    strerror(errno));
+			return (-1);
+		}
+		if (read(fd, sector, sizeof(sector)) != sizeof(sector)) {
+			gctl_error(req, "Cannot read metadata from %s: %s.",
+			    prov, strerror(errno));
+			close(fd);
+			return (-1);
+		}
+		close(fd);
+	error = luks_metadata_raw_decode(sector, md);
+	switch (error) {
+	case 0:
+		break;
+	case EOPNOTSUPP:
+		gctl_error(req,
+		    "Provider's %s metadata version %u is too new.\n"
+		    "gluks: The highest supported version is %u.",
+		    prov, (unsigned int)md->md_version, G_LUKS_VERSION);
+		return (-1);
+	case EINVAL:
+		gctl_error(req, "Inconsistent provider's %s metadata.", prov);
+		return (-1);
+	default:
+		gctl_error(req,
+		    "Unexpected error while decoding provider's %s metadata: %s.",
+		    prov, strerror(error));
+		return (-1);
+	}
+	return (0);
+}
+
+
+static void
+luks_dump_raw(struct gctl_req *req)
+{
+	struct g_luks_metadata md;
+	const char *name;
+	int i, nargs;
+
+	nargs = gctl_get_int(req, "nargs");
+	if (nargs < 1) {
+		gctl_error(req, "Too few arguments.");
+		return;
+	}
+
+	for (i = 0; i < nargs; i++) {
+		name = gctl_get_ascii(req, "arg%d", i);
+		if (luks_metadata_raw_read(NULL, name, &md) == -1) {
+			gctl_error(req, "Not fully done.");
+			continue;
+		}
+		printf("Metadata on %s:\n", name);
+		luks_metadata_raw_dump(&md);
 		printf("\n");
 	}
 }
