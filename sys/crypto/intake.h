@@ -43,7 +43,8 @@
 
 enum {
         KEYBUF_TYPE_NONE,
-        KEYBUF_TYPE_GELI
+        KEYBUF_TYPE_GELI,
+	KEYBUF_TYPE_GLUKS
 };
 
 struct keybuf_ent {
