@@ -6,6 +6,7 @@ SUBDIR=	cache
 SUBDIR+=concat
 .if ${MK_OPENSSL} != "no"
 SUBDIR+=eli
+SUBDIR+=luks
 .endif
 SUBDIR+=journal
 SUBDIR+=label

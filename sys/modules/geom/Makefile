@@ -12,6 +12,7 @@ SUBDIR=	geom_bde \
 	geom_journal \
 	geom_label \
 	geom_linux_lvm \
+	geom_luks \
 	geom_mirror \
 	geom_mountver \
 	geom_multipath \
