@@ -138,8 +138,7 @@ luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 	p = data;
 
 	bcopy(p,md->md_magic,sizeof(md->md_magic)); p += sizeof(md->md_magic);
-	md->md_magic[LUKS_MAGIC_L - 1]='\0';
-	if (strcmp(md->md_magic, G_LUKS_MAGIC) != 0)
+	if (memcmp(md->md_magic, G_LUKS_MAGIC,LUKS_MAGIC_L) != 0)
 		return (EINVAL);
 	md->md_version = le16dec(p); p += sizeof(md->md_version);
 	switch (md->md_version) {
