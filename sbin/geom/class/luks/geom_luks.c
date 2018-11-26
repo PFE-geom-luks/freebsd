@@ -1808,7 +1808,7 @@ luks_metadata_raw_read(struct gctl_req *req, const char *prov,
 		gctl_error(req,
 		    "Provider's %s metadata version %u is too new.\n"
 		    "gluks: The highest supported version is %u.",
-		    prov, (unsigned int)md->md_version, G_LUKS_VERSION);
+		    prov, (unsigned int)md->md_version, LUKS_VERSION_01);
 		return (-1);
 	case EINVAL:
 		gctl_error(req, "Inconsistent provider's %s metadata.", prov);

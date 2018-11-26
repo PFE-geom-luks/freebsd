@@ -140,7 +140,7 @@ luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 	bcopy(p,md->md_magic,sizeof(md->md_magic)); p += sizeof(md->md_magic);
 	if (memcmp(md->md_magic, G_LUKS_MAGIC,LUKS_MAGIC_L) != 0)
 		return (EINVAL);
-	md->md_version = le16dec(p); p += sizeof(md->md_version);
+	md->md_version = be16dec(p); p += sizeof(md->md_version);
 	switch (md->md_version) {
 	case LUKS_VERSION_01:
 
@@ -155,23 +155,24 @@ luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 
 
 
-		md->md_payloadoffset = le32dec(p);		p += sizeof(md->md_payloadoffset);
-		md->md_keybytes = le32dec(p);			p += sizeof(md->md_keybytes);
+		md->md_payloadoffset = be32dec(p);		p += sizeof(md->md_payloadoffset);
+		md->md_keybytes = be32dec(p);			p += sizeof(md->md_keybytes);
 		bcopy(p,md->md_mkdigest,sizeof(md->md_mkdigest));	p += sizeof(md->md_mkdigest);
 		bcopy(p,md->md_mkdigestsalt,sizeof(md->md_mkdigestsalt)); p += sizeof(md->md_mkdigestsalt);
-		md->md_iterations = le32dec(p);			p += sizeof(md->md_iterations);
+		md->md_iterations = be32dec(p);			p += sizeof(md->md_iterations);
 		
 		bcopy(p,md->md_uuid,sizeof(md->md_uuid)); 	p += sizeof(md->md_uuid);
 		md->md_uuid[UUID_STRING_L-1]='\0';
 
 		bcopy(p,md->md_keyslot,sizeof(md->md_keyslot));
 		for ( i = 0 ; i < LUKS_NUMKEYS; i++){
-			md->md_keyslot[i].active = 	le32dec(p); p += sizeof(md->md_keyslot[i].active);
-			md->md_keyslot[i].iterations = 	le32dec(p); p += sizeof(md->md_keyslot[i].iterations);
-			md->md_keyslot[i].keymaterialoffset = le32dec(p); p += sizeof(md->md_keyslot[i].keymaterialoffset);
-			md->md_keyslot[i].stripes = le32dec(p); p+= sizeof(md->md_keyslot[i].stripes);
+			md->md_keyslot[i].active = 	be32dec(p); p += sizeof(md->md_keyslot[i].active);
+			md->md_keyslot[i].iterations = 	be32dec(p); p += sizeof(md->md_keyslot[i].iterations);
+			md->md_keyslot[i].keymaterialoffset = be32dec(p); p += sizeof(md->md_keyslot[i].keymaterialoffset);
+			md->md_keyslot[i].stripes = be32dec(p); p+= sizeof(md->md_keyslot[i].stripes);
 		}
 		error=0;
+		break;
 	default:
 		error = EOPNOTSUPP;
 		break;
