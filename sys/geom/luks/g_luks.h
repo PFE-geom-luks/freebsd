@@ -28,17 +28,42 @@
  * $FreeBSD$
  */
 
-#ifndef	_G_PFE_H_
-#define	_G_PFE_H_
+#ifndef	_G_LUKS_H_
+#define	_G_LUKS_H_
 
-#define	G_PFE_CLASS_NAME	"PFE"
-#define	G_PFE_VERSION		1
-#define	G_PFE_SUFFIX		".pfe"
+#include <sys/endian.h>
+#include <sys/errno.h>
+#include <sys/malloc.h>
+#include <crypto/sha2/sha256.h>
+#include <crypto/sha2/sha512.h>
+#include <opencrypto/cryptodev.h>
+#ifdef _KERNEL
+#include <sys/bio.h>
+#include <sys/libkern.h>
+#include <sys/lock.h>
+#include <sys/mutex.h>
+#include <geom/geom.h>
+#include <crypto/intake.h>
+#else
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include <strings.h>
+#endif
+#include <sys/queue.h>
+#include <sys/tree.h>
+#ifndef _OpenSSL_
+#include <sys/md5.h>
+#endif
+
+#define	G_LUKS_CLASS_NAME	"LUKS"
+#define	G_LUKS_VERSION		1
+#define	G_LUKS_SUFFIX		".luks"
 /*
- * Special flag to instruct gpfe to passthrough the underlying provider's
+ * Special flag to instruct gluks to passthrough the underlying provider's
  * physical path
  */
-#define G_PFE_PHYSPATH_PASSTHROUGH "\255"
+#define G_LUKS_PHYSPATH_PASSTHROUGH "\255"
 
 #define LUKS_MAGIC_L		6
 #define LUKS_CIPHERNAME_L 	32
@@ -51,20 +76,20 @@
 
 
 #ifdef _KERNEL
-#define	G_PFE_DEBUG(lvl, ...)	do {					\
-	if (g_pfe_debug >= (lvl)) {					\
-		printf("GEOM_PFE");					\
-		if (g_pfe_debug > 0)					\
+#define	G_LUKS_DEBUG(lvl, ...)	do {					\
+	if (g_luks_debug >= (lvl)) {					\
+		printf("GEOM_LUKS");					\
+		if (g_luks_debug > 0)					\
 			printf("[%u]", lvl);				\
 		printf(": ");						\
 		printf(__VA_ARGS__);					\
 		printf("\n");						\
 	}								\
 } while (0)
-#define	G_PFE_LOGREQ(bp, ...)	G_PFE_LOGREQLVL(2, bp, __VA_ARGS__)
-#define G_PFE_LOGREQLVL(lvl, bp, ...) do {				\
-	if (g_pfe_debug >= (lvl)) {					\
-		printf("GEOM_PFE[%d]: ", (lvl));			\
+#define	G_LUKS_LOGREQ(bp, ...)	G_LUKS_LOGREQLVL(2, bp, __VA_ARGS__)
+#define G_LUKS_LOGREQLVL(lvl, bp, ...) do {				\
+	if (g_luks_debug >= (lvl)) {					\
+		printf("GEOM_LUKS[%d]: ", (lvl));			\
 		printf(__VA_ARGS__);					\
 		printf(" ");						\
 		g_print_bio(bp);					\
@@ -72,7 +97,7 @@
 	}								\
 } while (0)
 
-struct g_pfe_softc {
+struct g_luks_softc {
 	struct g_geom  *sc_geom;
 	uint16_t 	sc_version;
 	char 		sc_magic[LUKS_MAGIC_L];
@@ -81,7 +106,7 @@ struct g_pfe_softc {
 #endif	/* _KERNEL */
 
 
-struct g_pfe_metadata {
+struct g_luks_metadata {
 	char 				md_magic[LUKS_MAGIC_L];			/* Magic value. */
 	uint16_t			md_version;				/* Version number. */
 	char				md_ciphername[LUKS_CIPHERNAME_L];	/* Cipher name. */
@@ -103,7 +128,7 @@ struct g_pfe_metadata {
 } __packed;
 
 static __inline int
-pfe_metadata_decode(const u_char *data, struct g_pfe_metadata *md)
+luks_metadata_decode(const u_char *data, struct g_luks_metadata *md)
 {
 	const u_char *p;
 	unsigned int i;
@@ -134,12 +159,12 @@ pfe_metadata_decode(const u_char *data, struct g_pfe_metadata *md)
 }
 
 static __inline void
-pfe_metadata_dump(const struct g_pfe_metadata *md){
+luks_metadata_dump(const struct g_luks_metadata *md){
 	printf(" magic: %s", md->md_magic);
 }
 
 static __inline void
-pfe_metadata_softc(struct g_pfe_softc *sc, const struct g_pfe_metadata *md)
+luks_metadata_softc(struct g_luks_softc *sc, const struct g_luks_metadata *md)
 {
 	sc->sc_magic = md->md_magic;
 	sc->sc_version = md->md_version;
@@ -147,4 +172,4 @@ pfe_metadata_softc(struct g_pfe_softc *sc, const struct g_pfe_metadata *md)
 
 
 
-#endif	/* _G_PFE_H_ */
+#endif	/* _G_LUKS_H_ */

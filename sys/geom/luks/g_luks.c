@@ -31,7 +31,9 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/cons.h>
 #include <sys/kernel.h>
+#include <sys/linker.h>
 #include <sys/module.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
@@ -39,44 +41,55 @@ __FBSDID("$FreeBSD$");
 #include <sys/sbuf.h>
 #include <sys/sysctl.h>
 #include <sys/malloc.h>
+#include <sys/eventhandler.h>
+#include <sys/kthread.h>
+#include <sys/proc.h>
+#include <sys/sched.h>
+#include <sys/smp.h>
+#include <sys/uio.h>
+#include <sys/vnode.h>
+
+#include <vm/uma.h>
+
 #include <geom/geom.h>
-#include <geom/pfe/g_pfe.h>
+#include <geom/luks/g_luks.h>
+#include <geom/luks/pkcs5v2.h>
 
 
 SYSCTL_DECL(_kern_geom);
 MALLOC_DEFINE(M_ELI, "eli data", "GEOM_ELI Data");
-static SYSCTL_NODE(_kern_geom, OID_AUTO, pfe, CTLFLAG_RW, 0, "GEOM_PFE stuff");
-static u_int g_pfe_debug = 0;
-SYSCTL_UINT(_kern_geom_pfe, OID_AUTO, debug, CTLFLAG_RW, &g_pfe_debug, 0,
+static SYSCTL_NODE(_kern_geom, OID_AUTO, luks, CTLFLAG_RW, 0, "GEOM_LUKS stuff");
+static u_int g_luks_debug = 0;
+SYSCTL_UINT(_kern_geom_luks, OID_AUTO, debug, CTLFLAG_RW, &g_luks_debug, 0,
     "Debug level");
 
-static int g_pfe_destroy(struct g_geom *gp, boolean_t force);
-static int g_pfe_destroy_geom(struct gctl_req *req, struct g_class *mp,
+static int g_luks_destroy(struct g_geom *gp, boolean_t force);
+static int g_luks_destroy_geom(struct gctl_req *req, struct g_class *mp,
     struct g_geom *gp);
-static void g_pfe_config(struct gctl_req *req, struct g_class *mp,
+static void g_luks_config(struct gctl_req *req, struct g_class *mp,
     const char *verb);
-static void g_pfe_dumpconf(struct sbuf *sb, const char *indent,
+static void g_luks_dumpconf(struct sbuf *sb, const char *indent,
     struct g_geom *gp, struct g_consumer *cp, struct g_provider *pp);
 
-struct g_class g_pfe_class = {
-	.name = G_PFE_CLASS_NAME,
+struct g_class g_luks_class = {
+	.name = G_LUKS_CLASS_NAME,
 	.version = G_VERSION,
-	.ctlreq = g_pfe_config,
-	.destroy_geom = g_pfe_destroy_geom
+	.ctlreq = g_luks_config,
+	.destroy_geom = g_luks_destroy_geom
 };
 
 
 static void
-g_pfe_orphan(struct g_consumer *cp)
+g_luks_orphan(struct g_consumer *cp)
 {
 	g_topology_assert();
-	g_pfe_destroy(cp->geom, 1);
+	g_luks_destroy(cp->geom, 1);
 }
 
 static void
-g_pfe_start(struct bio *bp)
+g_luks_start(struct bio *bp)
 {
-	struct g_pfe_softc *sc;
+	struct g_luks_softc *sc;
 	struct g_geom *gp;
 	struct g_provider *pp;
 	struct bio *cbp;
@@ -84,12 +97,12 @@ g_pfe_start(struct bio *bp)
 
 	gp = bp->bio_to->geom;
 	sc = gp->softc;
-	G_PFE_LOGREQ(bp, "Request received.");
+	G_LUKS_LOGREQ(bp, "Request received.");
 	if (failprob > 0) {
 		u_int rval;
 		rval = arc4random() % 100;
 		if (rval < failprob) {
-			G_PFE_LOGREQLVL(1, bp, "Returning error=%d.", sc->sc_error);
+			G_LUKS_LOGREQLVL(1, bp, "Returning error=%d.", sc->sc_error);
 			g_io_deliver(bp, sc->sc_error);
 			return;
 		}
@@ -104,12 +117,12 @@ g_pfe_start(struct bio *bp)
 	pp = LIST_FIRST(&gp->provider);
 	KASSERT(pp != NULL, ("NULL pp"));
 	cbp->bio_to = pp;
-	G_PFE_LOGREQ(cbp, "Sending request.");
+	G_LUKS_LOGREQ(cbp, "Sending request.");
 	g_io_request(cbp, LIST_FIRST(&gp->consumer));
 }
 
 static int
-g_pfe_access(struct g_provider *pp, int dr, int dw, int de)
+g_luks_access(struct g_provider *pp, int dr, int dw, int de)
 {
 	struct g_geom *gp;
 	struct g_consumer *cp;
@@ -124,30 +137,30 @@ g_pfe_access(struct g_provider *pp, int dr, int dw, int de)
 
 
 struct g_geom *
-g_pfe_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
-    const struct g_pfe_metadata *md)
+g_luks_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
+    const struct g_luks_metadata *md)
 {
-	struct g_pfe_softc *sc;
+	struct g_luks_softc *sc;
 	struct g_geom *gp;
 	struct g_provider *pp;
 	struct g_consumer *cp;
 	u_int i;
 	int error;
 
-	G_PFE_DEBUG(1, "Creating device %s%s.", bpp->name, G_PFE_SUFFIX);
+	G_LUKS_DEBUG(1, "Creating device %s%s.", bpp->name, G_LUKS_SUFFIX);
 
-	gp = g_new_geomf(mp, "%s%s", bpp->name, G_PFE_SUFFIX);
-	sc = malloc(sizeof(*sc), M_PFE, M_WAITOK | M_ZERO);
-	gp->start = g_pfe_start;
+	gp = g_new_geomf(mp, "%s%s", bpp->name, G_LUKS_SUFFIX);
+	sc = malloc(sizeof(*sc), M_LUKS, M_WAITOK | M_ZERO);
+	gp->start = g_luks_start;
 	/*
 	 * Spoiling can happen even though we have the provider open
 	 * exclusively, e.g. through media change events.
 	 */
-	gp->spoiled = g_pfe_orphan;
-	gp->orphan = g_pfe_orphan;
-	gp->dumpconf = g_pfe_dumpconf;
+	gp->spoiled = g_luks_orphan;
+	gp->orphan = g_luks_orphan;
+	gp->dumpconf = g_luks_dumpconf;
 
-	pfe_metadata_softc(sc, md);
+	luks_metadata_softc(sc, md);
 	gp->softc = sc;
 	sc->sc_geom = gp;
 
@@ -160,7 +173,7 @@ g_pfe_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 			gctl_error(req, "Cannot attach to %s (error=%d).",
 			    bpp->name, error);
 		} else {
-			G_PFE_DEBUG(1, "Cannot attach to %s (error=%d).",
+			G_LUKS_DEBUG(1, "Cannot attach to %s (error=%d).",
 			    bpp->name, error);
 		}
 		goto failed;
@@ -179,13 +192,13 @@ g_pfe_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 	}
 
 
-	pp = g_new_providerf(gp, "%s%s", bpp->name, G_PFE_SUFFIX);
+	pp = g_new_providerf(gp, "%s%s", bpp->name, G_LUKS_SUFFIX);
 	pp->mediasize = sc->sc_mediasize;
 	pp->sectorsize = sc->sc_sectorsize;
 
 	g_error_provider(pp, 0);
 
-	G_PFE_DEBUG(0, "Device %s created.", pp->name);
+	G_LUKS_DEBUG(0, "Device %s created.", pp->name);
 	return (gp);
 failed:
 	if (cp->provider != NULL)
@@ -200,9 +213,9 @@ failed:
 }
 
 static int
-g_pfe_destroy(struct g_geom *gp, boolean_t force)
+g_luks_destroy(struct g_geom *gp, boolean_t force)
 {
-	struct g_pfe_softc *sc;
+	struct g_luks_softc *sc;
 	struct g_provider *pp;
 
 	g_topology_assert();
@@ -212,15 +225,15 @@ g_pfe_destroy(struct g_geom *gp, boolean_t force)
 	pp = LIST_FIRST(&gp->provider);
 	if (pp != NULL && (pp->acr != 0 || pp->acw != 0 || pp->ace != 0)) {
 		if (force) {
-			G_PFE_DEBUG(0, "Device %s is still open, so it "
+			G_LUKS_DEBUG(0, "Device %s is still open, so it "
 			    "can't be definitely removed.", pp->name);
 		} else {
-			G_PFE_DEBUG(1, "Device %s is still open (r%dw%de%d).",
+			G_LUKS_DEBUG(1, "Device %s is still open (r%dw%de%d).",
 			    pp->name, pp->acr, pp->acw, pp->ace);
 			return (EBUSY);
 		}
 	} else {
-		G_PFE_DEBUG(0, "Device %s removed.", gp->name);
+		G_LUKS_DEBUG(0, "Device %s removed.", gp->name);
 	}
 	gp->softc = NULL;
 	g_free(sc);
@@ -229,14 +242,14 @@ g_pfe_destroy(struct g_geom *gp, boolean_t force)
 }
 
 static int
-g_pfe_destroy_geom(struct gctl_req *req, struct g_class *mp, struct g_geom *gp)
+g_luks_destroy_geom(struct gctl_req *req, struct g_class *mp, struct g_geom *gp)
 {
 
-	return (g_pfe_destroy(gp, 0));
+	return (g_luks_destroy(gp, 0));
 }
 
 static void
-g_pfe_ctl_create(struct gctl_req *req, struct g_class *mp)
+g_luks_ctl_create(struct gctl_req *req, struct g_class *mp)
 {
 	struct g_provider *pp;
 	int i, *nargs;
@@ -271,20 +284,20 @@ g_pfe_ctl_create(struct gctl_req *req, struct g_class *mp)
 			name += strlen("/dev/");
 		pp = g_provider_by_name(name);
 		if (pp == NULL) {
-			G_PFE_DEBUG(1, "Provider %s is invalid.", name);
+			G_LUKS_DEBUG(1, "Provider %s is invalid.", name);
 			gctl_error(req, "Provider %s is invalid.", name);
 			return;
 		}
-		if (g_pfe_create(req, mp, pp,physpath) != 0) {
+		if (g_luks_create(req, mp, pp,physpath) != 0) {
 			return;
 		}
 	}
 }
 
 static void
-g_pfe_ctl_configure(struct gctl_req *req, struct g_class *mp)
+g_luks_ctl_configure(struct gctl_req *req, struct g_class *mp)
 {
-	struct g_pfe_softc *sc;
+	struct g_luks_softc *sc;
 	struct g_provider *pp;
 	int i, *nargs;
 	intmax_t *error;
@@ -317,7 +330,7 @@ g_pfe_ctl_configure(struct gctl_req *req, struct g_class *mp)
 			name += strlen("/dev/");
 		pp = g_provider_by_name(name);
 		if (pp == NULL || pp->geom->class != mp) {
-			G_PFE_DEBUG(1, "Provider %s is invalid.", name);
+			G_LUKS_DEBUG(1, "Provider %s is invalid.", name);
 			gctl_error(req, "Provider %s is invalid.", name);
 			return;
 		}
@@ -332,7 +345,7 @@ g_pfe_ctl_configure(struct gctl_req *req, struct g_class *mp)
 }
 
 static struct g_geom *
-g_pfe_find_geom(struct g_class *mp, const char *name)
+g_luks_find_geom(struct g_class *mp, const char *name)
 {
 	struct g_geom *gp;
 
@@ -344,7 +357,7 @@ g_pfe_find_geom(struct g_class *mp, const char *name)
 }
 
 static void
-g_pfe_ctl_destroy(struct gctl_req *req, struct g_class *mp)
+g_luks_ctl_destroy(struct gctl_req *req, struct g_class *mp)
 {
 	int *nargs, *force, error, i;
 	struct g_geom *gp;
@@ -375,13 +388,13 @@ g_pfe_ctl_destroy(struct gctl_req *req, struct g_class *mp)
 		}
 		if (strncmp(name, "/dev/", strlen("/dev/")) == 0)
 			name += strlen("/dev/");
-		gp = g_pfe_find_geom(mp, name);
+		gp = g_luks_find_geom(mp, name);
 		if (gp == NULL) {
-			G_PFE_DEBUG(1, "Device %s is invalid.", name);
+			G_LUKS_DEBUG(1, "Device %s is invalid.", name);
 			gctl_error(req, "Device %s is invalid.", name);
 			return;
 		}
-		error = g_pfe_destroy(gp, *force);
+		error = g_luks_destroy(gp, *force);
 		if (error != 0) {
 			gctl_error(req, "Cannot destroy device %s (error=%d).",
 			    gp->name, error);
@@ -393,7 +406,7 @@ g_pfe_ctl_destroy(struct gctl_req *req, struct g_class *mp)
 static void
 
 static void
-g_pfe_config(struct gctl_req *req, struct g_class *mp, const char *verb)
+g_luks_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 {
 	uint32_t *version;
 
@@ -404,19 +417,19 @@ g_pfe_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 		gctl_error(req, "No '%s' argument.", "version");
 		return;
 	}
-	if (*version != G_PFE_VERSION) {
+	if (*version != G_LUKS_VERSION) {
 		gctl_error(req, "Userland and kernel parts are out of sync.");
 		return;
 	}
 
 	if (strcmp(verb, "create") == 0) {
-		g_pfe_ctl_create(req, mp);
+		g_luks_ctl_create(req, mp);
 		return;
 	} else if (strcmp(verb, "configure") == 0) {
-		g_pfe_ctl_configure(req, mp);
+		g_luks_ctl_configure(req, mp);
 		return;
 	} else if (strcmp(verb, "destroy") == 0) {
-		g_pfe_ctl_destroy(req, mp);
+		g_luks_ctl_destroy(req, mp);
 		return;
 	}
 
@@ -424,10 +437,10 @@ g_pfe_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 }
 
 static void
-g_pfe_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
+g_luks_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
     struct g_consumer *cp, struct g_provider *pp)
 {
-	struct g_pfe_softc *sc;
+	struct g_luks_softc *sc;
 
 	if (pp != NULL || cp != NULL)
 		return;
@@ -439,8 +452,8 @@ g_pfe_dumpconf(struct sbuf *sb, const char *indent, struct g_geom *gp,
 
 
 int
-g_pfe_read_metadata(struct g_class *mp, struct g_provider *pp,
-    struct g_pfe_metadata *md)
+g_luks_read_metadata(struct g_class *mp, struct g_provider *pp,
+    struct g_luks_metadata *md)
 {
 	struct g_geom *gp;
 	struct g_consumer *cp;
@@ -449,16 +462,16 @@ g_pfe_read_metadata(struct g_class *mp, struct g_provider *pp,
 
 	g_topology_assert();
 
-	gp = g_new_geomf(mp, "pfe:taste");
-	gp->start = g_pfe_start;
+	gp = g_new_geomf(mp, "luks:taste");
+	gp->start = g_luks_start;
 	gp->access = g_std_access;
 	/*
-	 * g_pfe_read_metadata() is always called from the event thread.
+	 * g_luks_read_metadata() is always called from the event thread.
 	 * Our geom is created and destroyed in the same event, so there
 	 * could be no orphan nor spoil event in the meantime.
 	 */
-	gp->orphan = g_pfe_orphan_spoil_assert;
-	gp->spoiled = g_pfe_orphan_spoil_assert;
+	gp->orphan = g_luks_orphan_spoil_assert;
+	gp->spoiled = g_luks_orphan_spoil_assert;
 	cp = g_new_consumer(gp);
 	error = g_attach(cp, pp);
 	if (error != 0)
@@ -472,7 +485,7 @@ g_pfe_read_metadata(struct g_class *mp, struct g_provider *pp,
 	g_topology_lock();
 	if (buf == NULL)
 		goto end;
-	error = pfe_metadata_decode(buf, md);
+	error = luks_metadata_decode(buf, md);
 	if (error != 0)
 		goto end;
 	/* Metadata was read and decoded successfully. */
@@ -491,18 +504,18 @@ end:
 
 
 static void
-g_pfe_orphan(struct g_consumer *cp)
+g_luks_orphan(struct g_consumer *cp)
 {
-	struct g_pfe_softc *sc;
+	struct g_luks_softc *sc;
 
 	g_topology_assert();
 	sc = cp->geom->softc;
 	if (sc == NULL)
 		return;
-	g_pfe_destroy(sc,TRUE);
+	g_luks_destroy(sc,TRUE);
 }
 
 
 
-DECLARE_GEOM_CLASS(g_pfe_class, g_pfe);
-MODULE_VERSION(geom_pfe, 0);
+DECLARE_GEOM_CLASS(g_luks_class, g_luks);
+MODULE_VERSION(geom_luks, 0);
