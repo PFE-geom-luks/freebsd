@@ -51,6 +51,7 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 
 #include <geom/luks/g_luks.h>
+#include <geom/luks/g_luks_metadata.h>
 #include <geom/luks/pkcs5v2.h>
 
 #include "core/geom.h"
