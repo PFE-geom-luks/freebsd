@@ -55,7 +55,7 @@
 #endif
 
 #define	G_LUKS_CLASS_NAME	"LUKS"
-#define	G_LUKS_MAGIC		"GEOM::LUKS"
+#define	G_LUKS_MAGIC		"LUKS\xba\xbe"
 #define	G_LUKS_SUFFIX		".luks"
 
 /*
