@@ -35,6 +35,7 @@
 #include <crypto/sha2/sha256.h>
 #include <crypto/sha2/sha512.h>
 #include <opencrypto/cryptodev.h>
+#include <geom/luks/g_luks.h>
 #ifdef _KERNEL
 #include <sys/bio.h>
 #include <sys/libkern.h>
@@ -145,14 +146,25 @@ luks_metadata_decode(const u_char *data, struct g_luks_metadata_raw *md)
 	case LUKS_VERSION_01:
 
 		bcopy(p,md->md_ciphername,sizeof(md->md_ciphername)); 	p += sizeof(md->md_ciphername);
+		md->md_ciphername[LUKS_CIPHERNAME_L-1]='\0';
+
 		bcopy(p,md->md_ciphermode,sizeof(md->md_ciphermode));	p += sizeof(md->md_ciphermode);
+		md->md_ciphermode[LUKS_CIPHERMODE_L-1]='\0';
+		
 		bcopy(p,md->md_hashspec,sizeof(md->md_hashspec));	p += sizeof(md->md_hashspec);
+		md->md_hashspec[LUKS_HASHSPEC_L-1]='\0';
+
+
+
 		md->md_payloadoffset = le32dec(p);		p += sizeof(md->md_payloadoffset);
 		md->md_keybytes = le32dec(p);			p += sizeof(md->md_keybytes);
 		bcopy(p,md->md_mkdigest,sizeof(md->md_mkdigest));	p += sizeof(md->md_mkdigest);
 		bcopy(p,md->md_mkdigestsalt,sizeof(md->md_mkdigestsalt)); p += sizeof(md->md_mkdigestsalt);
 		md->md_iterations = le32dec(p);			p += sizeof(md->md_iterations);
+		
 		bcopy(p,md->md_uuid,sizeof(md->md_uuid)); 	p += sizeof(md->md_uuid);
+		md->md_uuid[UUID_STRING_L-1]='\0';
+
 		bcopy(p,md->md_keyslot,sizeof(md->md_keyslot));
 		for ( i = 0 ; i < LUKS_NUMKEYS; i++){
 			md->md_keyslot[i].active = 	le32dec(p); p += sizeof(md->md_keyslot[i].active);
