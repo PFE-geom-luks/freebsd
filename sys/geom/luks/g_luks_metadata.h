@@ -199,15 +199,13 @@ luks_metadata_raw_dump(const struct g_luks_metadata_raw *md)
 	printf("         UUID: %s\n", md->md_uuid);
 }
 
-static __inline int
-luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, const struct g_luks_metadata *md)
+static __inline void
+luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_metadata *md)
 {
-	int error;
 	bcopy(md_raw->md_magic,md->md_magic,sizeof(md->md_magic));
 	md->md_version = G_LUKS_VERSION_04;
 	md->md_ealgo = g_luks_str2ealgo(md_raw->md_ciphername);
 	md->md_keylen = 8 * md_raw->md_keybytes;
-	md->md_aalgo = NULL;
 	md->md_sectorsize = LUKS_SECTOR_SIZE;
 	md->md_iterations = md_raw->md_iterations;
 	bcopy(md_raw->md_mkdigestsalt,md->md_salt,sizeof(md->md_salt));
