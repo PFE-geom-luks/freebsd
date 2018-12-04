@@ -195,6 +195,7 @@ luks_metadata_raw_dump(const struct g_luks_metadata_raw *md)
 	printf("     keybytes: %u\n", md->md_keybytes);
 	printf("     mkdigest: %s\n", md->md_mkdigest);
 	printf(" mkdigestsalt: %s\n", md->md_mkdigestsalt);
+	printf("   iterations: %u\n", md->md_iterations);
 	printf("         UUID: %s\n", md->md_uuid);
 }
 
