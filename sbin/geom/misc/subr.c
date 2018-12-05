@@ -273,6 +273,52 @@ out:
 	return (error);
 }
 
+int
+g_metadata_raw_read(const char *name, unsigned char *md, size_t size,
+    const char *magic)
+{
+	struct std_metadata stdmd;
+	unsigned char *sector;
+	ssize_t sectorsize;
+	int error, fd;
+
+	sector = NULL;
+	error = 0;
+
+	fd = g_open(name, 0);
+	if (fd == -1)
+		return (errno);
+	sectorsize = g_sectorsize(fd);
+	if (sectorsize == -1) {
+		error = errno;
+		goto out;
+	}
+	assert(sectorsize >= (ssize_t)size);
+	sector = malloc(sectorsize);
+	if (sector == NULL) {
+		error = ENOMEM;
+		goto out;
+	}
+	if (read(fd, sector, sectorsize) !=
+	    sectorsize) {
+		error = errno;
+		goto out;
+	}
+	if (magic != NULL) {
+		std_metadata_decode(sector, &stdmd);
+		if (strcmp(stdmd.md_magic, magic) != 0) {
+			error = EINVAL;
+			goto out;
+		}
+	}
+	bcopy(sector, md, size);
+out:
+	if (sector != NULL)
+		free(sector);
+	g_close(fd);
+	return (error);
+}
+
 /* 
  * Actually write the GEOM label to the provider
  *

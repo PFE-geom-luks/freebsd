@@ -41,6 +41,8 @@ unsigned int g_get_sectorsize(const char *name);
 
 int g_metadata_read(const char *name, unsigned char *md, size_t size,
     const char *magic);
+int g_metadata_raw_read(const char *name, unsigned char *md, size_t size,
+    const char *magic);
 int g_metadata_store(const char *name, const unsigned char *md, size_t size);
 int g_metadata_clear(const char *name, const char *magic);
 

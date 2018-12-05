@@ -1774,7 +1774,6 @@ luks_dump(struct gctl_req *req)
 	}
 }
 
-
 static int
 luks_metadata_raw_read(struct gctl_req *req, const char *prov,
     struct g_luks_metadata_raw *md)
@@ -1799,6 +1798,15 @@ luks_metadata_raw_read(struct gctl_req *req, const char *prov,
 			return (-1);
 		}
 		close(fd);
+	} else {
+		/* This is a device provider. */
+		error = g_metadata_raw_read(prov, sector, sizeof(sector),
+		    G_LUKS_MAGIC);
+		if (error != 0) {
+			gctl_error(req, "Cannot read metadata from %s: %s.",
+			    prov, strerror(error));
+			return (-1);
+		}
 	}
 	error = luks_metadata_raw_decode(sector, md);
 	switch (error) {
