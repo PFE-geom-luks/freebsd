@@ -231,12 +231,27 @@ luks_metadata_raw_dump(const struct g_luks_metadata_raw *md)
 //	printf("        magic: %s\n", md->md_magic);
 }
 
+static __inline u_int
+g_luks_cipher2ealgo(const char *name, const char *mode)
+{
+	if (strcasecmp("aes", name) == 0) {
+		if (strcasecmp("xts-plain64", mode) == 0)
+			return (CRYPTO_AES_XTS);
+		else if (strcasecmp("cbc-plain64", mode) == 0)
+			return (CRYPTO_AES_CBC);
+	}
+	else if (strcasecmp("cast5", name) == 0 && strcasecmp("cbc-plain64", mode) == 0) {
+		return (CRYPTO_CAST_CBC);
+	}
+	return (CRYPTO_ALGORITHM_MIN - 1);
+}
+
 static __inline void
 luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_metadata *md)
 {
 	bcopy(md_raw->md_magic,md->md_magic,sizeof(md->md_magic));
 	md->md_version = G_LUKS_VERSION_04;
-	md->md_ealgo = g_luks_str2ealgo(md_raw->md_ciphername);
+	md->md_ealgo = g_luks_cipher2ealgo(md_raw->md_ciphername, md_raw->md_ciphermode);
 	md->md_keylen = 8 * md_raw->md_keybytes;
 	md->md_sectorsize = LUKS_SECTOR_SIZE;
 	md->md_iterations = md_raw->md_iterations;
