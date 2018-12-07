@@ -167,10 +167,10 @@ luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 
 		bcopy(p,md->md_keyslot,sizeof(md->md_keyslot));
 		for ( i = 0 ; i < LUKS_NUMKEYS; i++){
-			md->md_keyslot[i].active = 	be32dec(md->md_keyslot[i].active); 
-			md->md_keyslot[i].iterations = 	be32dec(md->md_keyslot[i].iterations);
-			md->md_keyslot[i].keymaterialoffset = be32dec(md->md_keyslot[i].keymaterialoffset);
-			md->md_keyslot[i].stripes = be32dec(md->md_keyslot[i].stripes);
+			md->md_keyslot[i].active = 	be32dec(&(md->md_keyslot[i].active)); 
+			md->md_keyslot[i].iterations = 	be32dec(&(md->md_keyslot[i].iterations));
+			md->md_keyslot[i].keymaterialoffset = be32dec(&(md->md_keyslot[i].keymaterialoffset));
+			md->md_keyslot[i].stripes = be32dec(&(md->md_keyslot[i].stripes));
 		}
 		error=0;
 		break;
