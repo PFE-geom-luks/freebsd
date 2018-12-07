@@ -34,8 +34,10 @@
 #include <sys/malloc.h>
 #include <crypto/sha2/sha256.h>
 #include <crypto/sha2/sha512.h>
+#include <crypto/sha1.h>
 #include <opencrypto/cryptodev.h>
 #include <geom/luks/g_luks.h>
+
 #ifdef _KERNEL
 #include <sys/bio.h>
 #include <sys/libkern.h>
@@ -213,5 +215,27 @@ luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_
 	
 }
 
+
+
+static __inline void
+luks_hash(const char *hashspec,const uint8_t *data, size_t length ,char *digest)
+{
+	if(strcasecmp("sha256",hashspec)==0){
+		SHA256_CTX lctx;
+		SHA256_Init(&lctx);
+		SHA256_Update(&lctx,data,length);
+		SHA256_Final(digest,&lctx);
+	}else if (strcasecmp("sha512",hashspec)==0){
+		SHA512_CTX lctx;
+		SHA512_Init(&lctx);
+		SHA512_Update(&lctx,data,length);
+		SHA512_Final(digest,&lctx);
+	}else if (strcasecmp("sha1",hashspec)==0){
+		SHA1_CTX lctx;
+		SHA1_Init(&lctx);
+		SHA1_Update(&lctx,data,length);
+		SHA1_Final(digest,&lctx);
+	}
+}
 
 #endif
