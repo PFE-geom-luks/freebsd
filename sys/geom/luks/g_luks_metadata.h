@@ -34,7 +34,6 @@
 #include <sys/malloc.h>
 #include <crypto/sha2/sha256.h>
 #include <crypto/sha2/sha512.h>
-#include <crypto/sha1.h>
 #include <opencrypto/cryptodev.h>
 #include <geom/luks/g_luks.h>
 
@@ -45,18 +44,19 @@
 #include <sys/mutex.h>
 #include <geom/geom.h>
 #include <crypto/intake.h>
+#include <crypto/sha1.h>
 #else
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#include <sha.h>
 #endif
 #include <sys/queue.h>
 #include <sys/tree.h>
 #ifndef _OpenSSL_
 #include <sys/md5.h>
 #endif
-
 
 
 #define LUKS_MAGIC_L		6
@@ -236,6 +236,57 @@ luks_hash(const char *hashspec,const uint8_t *data, size_t length ,char *digest)
 		SHA1_Update(&lctx,data,length);
 		SHA1_Final(digest,&lctx);
 	}
+}
+
+
+static __inline size_t
+af_splitted_size(size_t blocksize, unsigned int blocknumber)
+{
+	size_t af_size;
+	
+	af_size = blocksize * blocknumber;
+	af_size = (af_size + (LUKS_SECTOR_SIZE-1)) / LUKS_SECTOR_SIZE;
+
+	return af_size;
+}
+
+
+static __inline void
+xor(const char *block1, const char *block2, char *dst, size_t length)
+{
+	size_t j;
+	for (j=0;j<length;j++){
+		dst[j] = block1[j] ^ block2[j];
+	}
+}
+
+static __inline void
+af_split(const char *material, char *dst, size_t length, unsigned int stripes, const char *hashspec)
+{
+	unsigned int i;
+	char *lastblock = calloc(length,1);
+
+	bzero(dst,length);
+	for (i=0;i<stripes-1;i++){
+		arc4random_buf(dst+(i*length),length);
+		xor(dst+(i*length),lastblock,lastblock,length);
+		luks_hash(hashspec,lastblock,length,lastblock);	
+	}
+	xor(material,lastblock,dst+(stripes*length),length);
+}
+
+
+static __inline void
+af_merge(const char *material, char *dst, size_t length, unsigned int stripes, const char *hashspec)
+{	
+	unsigned int i;
+	char *lastblock = calloc(length,1);
+
+	for (i=0;i<stripes-1;i++){
+		xor(material+(i*length),lastblock,lastblock,length);
+		luks_hash(hashspec,lastblock,length,lastblock);	
+	}
+	xor(material+(stripes*length),lastblock,dst,length);
 }
 
 #endif
