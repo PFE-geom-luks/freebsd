@@ -69,6 +69,7 @@
 #define LUKS_SALTSIZE 		32
 #define LUKS_VERSION_01 	1
 #define LUKS_SECTOR_SIZE	512
+#define LUKS_KEY_ENABLED	0x00AC71F3
 
 struct g_luks_metadata_raw {
 	char 				md_magic[LUKS_MAGIC_L];			/* Magic value. */
@@ -152,7 +153,7 @@ luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 
 		bcopy(p,md->md_ciphermode,sizeof(md->md_ciphermode));	p += sizeof(md->md_ciphermode);
 		md->md_ciphermode[LUKS_CIPHERMODE_L-1]='\0';
-		
+
 		bcopy(p,md->md_hashspec,sizeof(md->md_hashspec));	p += sizeof(md->md_hashspec);
 		md->md_hashspec[LUKS_HASHSPEC_L-1]='\0';
 
@@ -163,7 +164,7 @@ luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 		bcopy(p,md->md_mkdigest,sizeof(md->md_mkdigest));	p += sizeof(md->md_mkdigest);
 		bcopy(p,md->md_mkdigestsalt,sizeof(md->md_mkdigestsalt)); p += sizeof(md->md_mkdigestsalt);
 		md->md_iterations = be32dec(p);			p += sizeof(md->md_iterations);
-		
+
 		bcopy(p,md->md_uuid,sizeof(md->md_uuid)); 	p += sizeof(md->md_uuid);
 		md->md_uuid[UUID_STRING_L-1]='\0';
 
@@ -186,19 +187,65 @@ luks_metadata_raw_decode(const u_char *data, struct g_luks_metadata_raw *md)
 #endif
 
 static __inline void
+hexprint(const char *d, int n, const char *sep)
+{
+	for(int i = 0; i < n; ++i)
+		printf("%02hhx%s", (const char)d[i], sep);
+}
+
+static __inline void
 luks_metadata_raw_dump(const struct g_luks_metadata_raw *md)
 {
-	printf("        magic: %s\n", md->md_magic);
-	printf("      version: %u\n", (u_int)md->md_version);
-	printf("   ciphername: %s\n", md->md_ciphername);
-	printf("   ciphermode: %s\n", md->md_ciphermode);
-	printf("     hashspec: %s\n", md->md_hashspec);
-	printf("payloadoffset: %u\n", md->md_payloadoffset);
-	printf("     keybytes: %u\n", md->md_keybytes);
-	printf("     mkdigest: %s\n", md->md_mkdigest);
-	printf(" mkdigestsalt: %s\n", md->md_mkdigestsalt);
-	printf("   iterations: %u\n", md->md_iterations);
-	printf("         UUID: %s\n", md->md_uuid);
+//	printf("LUKS header information for %s\n\n", mdata_device_path(cd));
+	printf("Version:       \t%d\n", (u_int)md->md_version);
+	printf("Cipher name:   \t%s\n", md->md_ciphername);
+	printf("Cipher mode:   \t%s\n", md->md_ciphermode);
+	printf("Hash spec:     \t%s\n", md->md_hashspec);
+	printf("Payload offset:\t%d\n", md->md_payloadoffset);
+	printf("MK bits:       \t%d\n", md->md_keybytes * 8);
+	printf("MK digest:     \t");
+	hexprint(md->md_mkdigest, LUKS_DIGESTSIZE, " ");
+	printf("\n");
+	printf("MK salt:       \t");
+	hexprint(md->md_mkdigestsalt, LUKS_SALTSIZE/2, " ");
+	printf("\n               \t");
+	hexprint(md->md_mkdigestsalt+LUKS_SALTSIZE/2, LUKS_SALTSIZE/2, " ");
+	printf("\n");
+	printf("MK iterations: \t%d\n", md->md_iterations);
+	printf("UUID:          \t%s\n\n", md->md_uuid);
+	for(int i = 0; i < LUKS_NUMKEYS; ++i) {
+		if(md->md_keyslot[i].active == LUKS_KEY_ENABLED) {
+			printf("Key Slot %d: ENABLED\n",i);
+			printf("\tIterations:         \t%d\n", md->md_keyslot[i].iterations);
+			printf("\tSalt:               \t");
+			hexprint(md->md_keyslot[i].salt, LUKS_SALTSIZE/2, " ");
+			printf("\n\t                      \t");
+			hexprint(md->md_keyslot[i].salt + LUKS_SALTSIZE/2, LUKS_SALTSIZE/2, " ");
+			printf("\n");
+
+			printf("\tKey material offset:\t%d\n", md->md_keyslot[i].keymaterialoffset);
+			printf("\tAF stripes:            \t%d\n", md->md_keyslot[i].stripes);
+		}
+		else
+			printf("Key Slot %d: DISABLED\n", i);
+	}
+
+//	printf("        magic: %s\n", md->md_magic);
+}
+
+static __inline u_int
+g_luks_cipher2ealgo(const char *name, const char *mode)
+{
+	if (strcasecmp("aes", name) == 0) {
+		if (strcasecmp("xts-plain64", mode) == 0)
+			return (CRYPTO_AES_XTS);
+		else if (strcasecmp("cbc-plain64", mode) == 0)
+			return (CRYPTO_AES_CBC);
+	}
+	else if (strcasecmp("cast5", name) == 0 && strcasecmp("cbc-plain64", mode) == 0) {
+		return (CRYPTO_CAST_CBC);
+	}
+	return (CRYPTO_ALGORITHM_MIN - 1);
 }
 
 static __inline void
@@ -206,13 +253,13 @@ luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_
 {
 	bcopy(md_raw->md_magic,md->md_magic,sizeof(md->md_magic));
 	md->md_version = G_LUKS_VERSION_04;
-	md->md_ealgo = g_luks_str2ealgo(md_raw->md_ciphername);
+	md->md_ealgo = g_luks_cipher2ealgo(md_raw->md_ciphername, md_raw->md_ciphermode);
 	md->md_keylen = 8 * md_raw->md_keybytes;
 	md->md_sectorsize = LUKS_SECTOR_SIZE;
 	md->md_iterations = md_raw->md_iterations;
 	bcopy(md_raw->md_mkdigestsalt,md->md_salt,sizeof(md->md_salt));
 
-	
+
 }
 
 
