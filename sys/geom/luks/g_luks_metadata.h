@@ -289,4 +289,20 @@ af_merge(const char *material, char *dst, size_t length, unsigned int stripes, c
 	xor(material+(stripes*length),lastblock,dst,length);
 }
 
+
+void g_luks_crypto_hmac_init_sha1(struct hmac_ctx *ctx, const uint8_t *hkey,
+    size_t hkeylen);
+void g_luks_crypto_hmac_update_sha1(struct hmac_ctx *ctx, const uint8_t *data,
+    size_t datasize);
+void g_luks_crypto_hmac_final_sha1(struct hmac_ctx *ctx, uint8_t *md, size_t mdsize);
+void g_luks_crypto_hmac_sha1(const uint8_t *hkey, size_t hkeysize,
+    const uint8_t *data, size_t datasize, uint8_t *md, size_t mdsize);
+
+void g_luks_crypto_hmac_init_sha256(struct hmac_ctx *ctx, const uint8_t *hkey,
+    size_t hkeylen);
+void g_luks_crypto_hmac_update_sha256(struct hmac_ctx *ctx, const uint8_t *data,
+    size_t datasize);
+void g_luks_crypto_hmac_final_sha256(struct hmac_ctx *ctx, uint8_t *md, size_t mdsize);
+void g_luks_crypto_hmac_sha256(const uint8_t *hkey, size_t hkeysize,
+    const uint8_t *data, size_t datasize, uint8_t *md, size_t mdsize);
 #endif
