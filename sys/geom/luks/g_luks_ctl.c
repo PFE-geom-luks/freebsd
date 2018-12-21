@@ -1116,6 +1116,29 @@ g_luks_ctl_kill(struct gctl_req *req, struct g_class *mp)
 	}
 }
 
+
+
+static void
+g_luks_ctl_test(struct gctl_req *req, struct g_class *mp)
+{
+	int *nargs;
+
+	g_topology_assert();
+
+	nargs = gctl_get_paraml(req, "nargs", sizeof(*nargs));
+	if (nargs == NULL) {
+		gctl_error(req, "No '%s' argument.", "nargs");
+		return;
+	}
+	
+	name = gctl_get_asciiparam(req, "arg0");
+	if (name == NULL) {
+		gctl_error(req, "No 'arg%u' argument.", 0);
+		return;
+	}
+	gctl_error(req,"Test : %s",name);
+}
+
 void
 g_luks_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 {
@@ -1162,6 +1185,8 @@ g_luks_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 		g_luks_ctl_resume(req, mp);
 	else if (strcmp(verb, "kill") == 0)
 		g_luks_ctl_kill(req, mp);
+	else if (strcomp(verb,"test") == 0)
+		g_luks_ctl_test(req,mp);
 	else
 		gctl_error(req, "Unknown verb.");
 }

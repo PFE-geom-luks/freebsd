@@ -274,6 +274,12 @@ struct g_command class_commands[] = {
 	{ "dump_raw", G_FLAG_VERBOSE, luks_main, G_NULL_OPTS,
 	    "[-v] prov ..."
 	},
+	{ "test", G_FLAG_VERBOSE | G_FLAG_LOADKLD, luks_main,
+	    {
+		G_OPT_SENTINEL
+	    },
+	    "[-v]"
+	},
 	G_CMD_SENTINEL
 };
 
@@ -344,6 +350,8 @@ luks_main(struct gctl_req *req, unsigned int flags)
 		luks_dump(req);
 	else if (strcmp(name, "dump_raw") == 0)
 		luks_dump_raw(req);
+	else if (strcmp(name, "test") == 0)
+		luks_test(req);
 	else if (strcmp(name, "clear") == 0)
 		luks_clear(req);
 	else
@@ -1854,4 +1862,20 @@ luks_dump_raw(struct gctl_req *req)
 		luks_metadata_raw_dump(&md);
 		printf("\n");
 	}
+}
+
+
+static void
+luks_test(struct gctl_req *req)
+{
+	const char *prov;
+	int nargs;
+
+	nargs = gctl_get_int(req, "nargs");
+	if (nargs != 1) {
+		gctl_error(req, "Invalid number of arguments.");
+		return;
+	}
+	test = gctl_get_ascii(req, "arg0");
+	gctl_issue(req)
 }
