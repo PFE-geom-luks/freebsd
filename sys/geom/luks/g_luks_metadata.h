@@ -239,10 +239,13 @@ g_luks_cipher2ealgo(const char *name, const char *mode)
 	if (strcasecmp("aes", name) == 0) {
 		if (strcasecmp("xts-plain64", mode) == 0)
 			return (CRYPTO_AES_XTS);
-		else if (strcasecmp("cbc-plain64", mode) == 0)
+		else if (strcasecmp("cbc-plain", mode) == 0)
+			return (CRYPTO_AES_CBC);
+		// TODO: handle the case with ESSIV as cipher mode
+		else if (strcasecmp("cbc-essiv:sha256", mode) == 0)
 			return (CRYPTO_AES_CBC);
 	}
-	else if (strcasecmp("cast5", name) == 0 && strcasecmp("cbc-plain64", mode) == 0) {
+	else if (strcasecmp("cast5", name) == 0 && strcasecmp("cbc-plain", mode) == 0) {
 		return (CRYPTO_CAST_CBC);
 	}
 	return (CRYPTO_ALGORITHM_MIN - 1);

@@ -135,7 +135,13 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
 		le64enc(off, (uint64_t)offset);
 
 	switch (sc->sc_ealgo) {
+	// TODO: check that IV is in plain64 and not plain(32)
 	case CRYPTO_AES_XTS:
+	// TODO: check that IV is in plain(32) and not plain64
+	// TODO: handle the case with ESSIV as cipher mode
+	case CRYPTO_AES_CBC:
+	// TODO: check that IV is in plain(32) and not plain64
+	case CRYPTO_CAST_CBC:
 		bcopy(off, iv, sizeof(off));
 		bzero(iv + sizeof(off), size - sizeof(off));
 		break;
