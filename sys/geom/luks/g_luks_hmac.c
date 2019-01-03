@@ -135,27 +135,30 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
 		le64enc(off, (uint64_t)offset);
 
 	switch (sc->sc_ealgo) {
-	// TODO: check that IV is in plain64 and not plain(32)
 	case CRYPTO_AES_XTS:
-	// TODO: check that IV is in plain(32) and not plain64
-	// TODO: handle the case with ESSIV as cipher mode
+		// TODO: check that IV is in plain64 and not plain(32)
+		bcopy(off, iv, sizeof(off));
+		bzero(iv + sizeof(off), size - sizeof(off));
+		break;
 	case CRYPTO_AES_CBC:
-	// TODO: check that IV is in plain(32) and not plain64
+		{
+			u_char hash[SHA256_DIGEST_LENGTH];
+			SHA256_CTX ctx;
+
+			/* Copy precalculated SHA256 context for IV-Key. */
+			bcopy(&sc->sc_ivctx, &ctx, sizeof(ctx));
+			SHA256_Update(&ctx, off, sizeof(off));
+			SHA256_Final(hash, &ctx);
+			bcopy(hash, iv, MIN(sizeof(hash), size));
+			break;
+		}
 	case CRYPTO_CAST_CBC:
+		// TODO: check that IV is in plain(32) and not plain64
 		bcopy(off, iv, sizeof(off));
 		bzero(iv + sizeof(off), size - sizeof(off));
 		break;
 	default:
-	    {
-		u_char hash[SHA256_DIGEST_LENGTH];
-		SHA256_CTX ctx;
-
-		/* Copy precalculated SHA256 context for IV-Key. */
-		bcopy(&sc->sc_ivctx, &ctx, sizeof(ctx));
-		SHA256_Update(&ctx, off, sizeof(off));
-		SHA256_Final(hash, &ctx);
-		bcopy(hash, iv, MIN(sizeof(hash), size));
+		// TODO: handle the case with aes-cbc-plain
 		break;
-	    }
 	}
 }
