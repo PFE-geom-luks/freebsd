@@ -79,6 +79,7 @@ static void luks_version(struct gctl_req *req);
 static void luks_clear(struct gctl_req *req);
 static void luks_dump(struct gctl_req *req);
 static void luks_dump_raw(struct gctl_req *req);
+static void luks_test(struct gctl_req *req);
 
 static int luks_backup_create(struct gctl_req *req, const char *prov,
     const char *file);
@@ -1786,7 +1787,7 @@ static int
 luks_metadata_raw_read(struct gctl_req *req, const char *prov,
     struct g_luks_metadata_raw *md)
 {
-	unsigned char sector[sizeof(struct g_luks_metadata)];
+	unsigned char sector[sizeof(struct g_luks_metadata_raw)];
 	int error;
 
 	if (g_get_sectorsize(prov) == 0) {
@@ -1868,7 +1869,7 @@ luks_dump_raw(struct gctl_req *req)
 static void
 luks_test(struct gctl_req *req)
 {
-	const char *prov;
+	const char *test;
 	int nargs;
 
 	nargs = gctl_get_int(req, "nargs");
@@ -1877,5 +1878,5 @@ luks_test(struct gctl_req *req)
 		return;
 	}
 	test = gctl_get_ascii(req, "arg0");
-	gctl_issue(req)
+	gctl_issue(req);
 }
