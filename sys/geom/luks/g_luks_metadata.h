@@ -372,7 +372,7 @@ g_luks_hashstr2aalgo(const char *hashspec)
 static __inline u_int
 g_luks_hashlen_hmac(int aalgo)
 {
-	switch (algo) {
+	switch (aalgo) {
 	case CRYPTO_SHA1_HMAC:
 		return SHA1_MDLEN;
 	case CRYPTO_RIPEMD160_HMAC:
