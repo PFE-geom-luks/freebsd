@@ -1177,7 +1177,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	luks_metadata_raw_to_md(&md_raw,&md);
 
 	for (i=0;i<LUKS_NUMKEYS;i++) {
-		if(md_raw->md_keyslot[i].active	== LUKS_KEY_ENABLED) {
+		if(md_raw.md_keyslot[i].active	== LUKS_KEY_ENABLED) {
 			nkey++;
 		}
 	}
@@ -1196,7 +1196,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	}
 
 	size_t splitted_key_length;
-	splitted_key_length = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[1].stripes);
+	splitted_key_length = af_splitted_size(md_raw.md_keybytes,md_raw.md_keyslot[1].stripes);
 
 	char keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
 
