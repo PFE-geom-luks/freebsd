@@ -186,11 +186,11 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 		pkcs5v2_genkey_sha1(digest,LUKS_DIGESTSIZE,md_raw->md_mkdigestsalt,LUKS_SALTSIZE,dkey,md_raw->md_iterations);
 
 		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
-			return (-1);
+			error = -1;
 		}else{
 			bcopy(dkey,mkey,sizeof(*dkey));
-			return 0;
 		}
+
 
 	case CRYPTO_RIPEMD160_HMAC:
 	case CRYPTO_SHA2_256_HMAC:
@@ -199,7 +199,17 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 		pkcs5v2_genkey(dkey,sizeof(dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
 	}
 
-	return 1;
+	bzero(dkey,sizeof(*dkey));
+	bzero(digest,sizeof(*digest));
+
+#ifdef _KERNEL
+	free(dkey,M_LUKS);
+	free(digest,M_LUKS);
+#else
+	free(dkey);
+	free(digest);
+#endif
+	return error;
 }
 
 /*

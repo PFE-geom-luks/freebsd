@@ -333,6 +333,11 @@ af_split(const char *material, char *dst, size_t length, unsigned int stripes, c
 		luks_hash(hashspec,lastblock,length,lastblock);	
 	}
 	xor_af(material,lastblock,dst+(stripes*length),length);
+#ifdef _KERNEL
+	free(lastblock,M_LUKS);
+#else
+	free(lastblock);
+#endif
 }
 
 
@@ -351,6 +356,11 @@ af_merge(const char *material, char *dst, size_t length, unsigned int stripes, c
 		luks_hash(hashspec,lastblock,length,lastblock);	
 	}
 	xor_af(material+(stripes*length),lastblock,dst,length);
+#ifdef _KERNEL
+	free(lastblock,M_LUKS);
+#else
+	free(lastblock);
+#endif
 }
 
 
