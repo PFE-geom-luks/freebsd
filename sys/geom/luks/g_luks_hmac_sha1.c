@@ -44,6 +44,7 @@ __FBSDID("$FreeBSD$");
 #define	_OpenSSL_
 #endif
 #include <geom/luks/g_luks.h>
+#include <geom/luks/g_luks_metadata.h>
 
 void
 g_luks_crypto_hmac_init_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *hkey,
@@ -60,9 +61,9 @@ g_luks_crypto_hmac_init_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *hkey,
 		bcopy(hkey, key, hkeylen);
 	else {
 		/* If key is longer than 64 bytes reset it to key = SHA1(key). */
-		SHA1_Init(&lctx);
-		SHA1_Update(&lctx, hkey, hkeylen);
-		SHA1_Final(key, &lctx);
+		SHA1Init(&lctx);
+		SHA1Update(&lctx, hkey, hkeylen);
+		SHA1Final(key, &lctx);
 	}
 
 	/* XOR key with ipad and opad values. */
@@ -72,12 +73,12 @@ g_luks_crypto_hmac_init_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *hkey,
 	}
 	explicit_bzero(key, sizeof(key));
 	/* Start inner SHA1. */
-	SHA1_Init(&ctx->innerctx);
-	SHA1_Update(&ctx->innerctx, k_ipad, sizeof(k_ipad));
+	SHA1Init(&ctx->innerctx);
+	SHA1Update(&ctx->innerctx, k_ipad, sizeof(k_ipad));
 	explicit_bzero(k_ipad, sizeof(k_ipad));
 	/* Start outer SHA1. */
-	SHA1_Init(&ctx->outerctx);
-	SHA1_Update(&ctx->outerctx, k_opad, sizeof(k_opad));
+	SHA1Init(&ctx->outerctx);
+	SHA1Update(&ctx->outerctx, k_opad, sizeof(k_opad));
 	explicit_bzero(k_opad, sizeof(k_opad));
 }
 
@@ -86,7 +87,7 @@ g_luks_crypto_hmac_update_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *data,
     size_t datasize)
 {
 
-	SHA1_Update(&ctx->innerctx, data, datasize);
+	SHA1Update(&ctx->innerctx, data, datasize);
 }
 
 void
@@ -95,11 +96,11 @@ g_luks_crypto_hmac_final_sha1(struct hmac_sha1_ctx *ctx, uint8_t *md, size_t mds
 	u_char digest[SHA1_MDLEN];
 
 	/* Complete inner hash */
-	SHA1_Final(digest, &ctx->innerctx);
+	SHA1Final(digest, &ctx->innerctx);
 	
 	/* Complete outer hash */
-	SHA1_Update(&ctx->outerctx, digest, sizeof(digest));
-	SHA1_Final(digest, &ctx->outerctx);
+	SHA1Update(&ctx->outerctx, digest, sizeof(digest));
+	SHA1Final(digest, &ctx->outerctx);
 	
 	explicit_bzero(ctx, sizeof(*ctx));
 	/* mdsize == 0 means "Give me the whole hash!" */

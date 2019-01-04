@@ -44,6 +44,7 @@ __FBSDID("$FreeBSD$");
 #define	_OpenSSL_
 #endif
 #include <geom/luks/g_luks.h>
+#include <geom/luks/g_luks_metadata.h>
 
 void
 g_luks_crypto_hmac_init_sha256(struct hmac_sha256_ctx *ctx, const uint8_t *hkey,
