@@ -95,7 +95,7 @@ pkcs5v2_genkey_sha256(uint8_t *key, unsigned keylen, const uint8_t *salt,
 	uint8_t *counter, *keyp;
 	u_int i, bsize, passlen;
 	uint32_t count;
-	struct hmac_ctx startpoint, ctx;
+	struct hmac_sha256_ctx startpoint, ctx;
 
 	passlen = strlen(passphrase);
 	bzero(key, keylen);
@@ -134,7 +134,7 @@ pkcs5v2_genkey_sha1(uint8_t *key, unsigned keylen, const uint8_t *salt,
 	uint8_t *counter, *keyp;
 	u_int i, bsize, passlen;
 	uint32_t count;
-	struct hmac_ctx startpoint, ctx;
+	struct hmac_sha1_ctx startpoint, ctx;
 
 	passlen = strlen(passphrase);
 	bzero(key, keylen);
