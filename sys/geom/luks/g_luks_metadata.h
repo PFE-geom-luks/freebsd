@@ -294,9 +294,15 @@ luks_hash(const char *hashspec,const uint8_t *data, size_t length ,char *digest)
 		SHA512_Final(digest,&lctx);
 	}else if (strcasecmp("sha1",hashspec)==0){
 		SHA1_CTX lctx;
+#ifdef _KERNEL
+		SHA1Init(&lctx);
+		SHA1Update(&lctx,data,length);
+		SHA1Final(digest,&lctx);
+#else
 		SHA1_Init(&lctx);
 		SHA1_Update(&lctx,data,length);
 		SHA1_Final(digest,&lctx);
+#endif
 	}
 }
 
