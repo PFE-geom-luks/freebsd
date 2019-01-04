@@ -1289,7 +1289,7 @@ g_luks_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 		g_luks_ctl_resume(req, mp);
 	else if (strcmp(verb, "kill") == 0)
 		g_luks_ctl_kill(req, mp);
-	else if (strcomp(verb,"test_passphrase") == 0)
+	else if (strcmp(verb,"test_passphrase") == 0)
 		g_luks_ctl_test_passphrase(req, mp);
 	else
 		gctl_error(req, "Unknown verb.");
