@@ -402,7 +402,8 @@ g_luks_hashlen_hmac(int aalgo)
 }
 
 
-int g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw, const struct g_luks_metadata *md, unsigned char *keymaterial, const unsigned char *passphrase, const size_t *passsize, unsigned char *mkey, unsigned int nkey );
+int g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw, const struct g_luks_metadata *md, unsigned char *keymaterial, const unsigned char *passphrase,
+		unsigned char *mkey, unsigned int nkey );
 
 void g_luks_crypto_hmac_init_sha1(struct hmac_ctx *ctx, const uint8_t *hkey,
     size_t hkeylen);

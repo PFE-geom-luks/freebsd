@@ -154,7 +154,7 @@ g_luks_mkey_decrypt(const struct g_luks_metadata *md, const unsigned char *key,
 int
 g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 	const struct g_luks_metadata *md, unsigned char *keymaterial, const unsigned char *passphrase,
-	const size_t *passsize, unsigned char *mkey, unsigned int nkey )
+	unsigned char *mkey, unsigned int nkey )
 {
 
 	int error;
