@@ -71,6 +71,11 @@
 #define LUKS_SECTOR_SIZE	512
 #define LUKS_KEY_ENABLED	0x00AC71F3
 
+#define G_LUKS_PASSLEN		1024
+#define SHA256_MDLEN		32
+#define SHA1_MDLEN		20
+#define RIPEMD160_MDLEN		20
+
 struct g_luks_metadata_raw {
 	char 				md_magic[LUKS_MAGIC_L];			/* Magic value. */
 	uint16_t			md_version;				/* Version number. */

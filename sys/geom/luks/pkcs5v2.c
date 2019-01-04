@@ -38,6 +38,7 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #include <geom/luks/g_luks.h>
+#include <geom/luks/g_luks_metadata.h>
 #include <geom/luks/pkcs5v2.h>
 
 static __inline void
@@ -79,6 +80,83 @@ pkcs5v2_genkey(uint8_t *key, unsigned keylen, const uint8_t *salt,
 			ctx = startpoint;
 			g_luks_crypto_hmac_update(&ctx, md, sizeof(md));
 			g_luks_crypto_hmac_final(&ctx, md, sizeof(md));
+			xor(keyp, md, bsize);
+		}
+	}
+	explicit_bzero(&startpoint, sizeof(startpoint));
+	explicit_bzero(&ctx, sizeof(ctx));
+}
+
+void
+pkcs5v2_genkey_sha256(uint8_t *key, unsigned keylen, const uint8_t *salt,
+    size_t saltsize, const char *passphrase, u_int iterations)
+{
+	uint8_t md[SHA256_MDLEN], saltcount[saltsize + sizeof(uint32_t)];
+	uint8_t *counter, *keyp;
+	u_int i, bsize, passlen;
+	uint32_t count;
+	struct hmac_ctx startpoint, ctx;
+
+	passlen = strlen(passphrase);
+	bzero(key, keylen);
+	bcopy(salt, saltcount, saltsize);
+	counter = saltcount + saltsize;
+
+	keyp = key;
+	for (count = 1; keylen > 0; count++, keylen -= bsize, keyp += bsize) {
+		bsize = MIN(keylen, sizeof(md));
+
+		be32enc(counter, count);
+
+		g_luks_crypto_hmac_init_sha256(&startpoint, passphrase, passlen);
+		ctx = startpoint;
+		g_luks_crypto_hmac_update_sha256(&ctx, saltcount, sizeof(saltcount));
+		g_luks_crypto_hmac_final_sha256(&ctx, md, sizeof(md));
+		xor(keyp, md, bsize);
+
+		for(i = 1; i < iterations; i++) {
+			ctx = startpoint;
+			g_luks_crypto_hmac_update_sha256(&ctx, md, sizeof(md));
+			g_luks_crypto_hmac_final_sha256(&ctx, md, sizeof(md));
+			xor(keyp, md, bsize);
+		}
+	}
+	explicit_bzero(&startpoint, sizeof(startpoint));
+	explicit_bzero(&ctx, sizeof(ctx));
+}
+
+
+void
+pkcs5v2_genkey_sha1(uint8_t *key, unsigned keylen, const uint8_t *salt,
+    size_t saltsize, const char *passphrase, u_int iterations)
+{
+	uint8_t md[SHA1_MDLEN], saltcount[saltsize + sizeof(uint32_t)];
+	uint8_t *counter, *keyp;
+	u_int i, bsize, passlen;
+	uint32_t count;
+	struct hmac_ctx startpoint, ctx;
+
+	passlen = strlen(passphrase);
+	bzero(key, keylen);
+	bcopy(salt, saltcount, saltsize);
+	counter = saltcount + saltsize;
+
+	keyp = key;
+	for (count = 1; keylen > 0; count++, keylen -= bsize, keyp += bsize) {
+		bsize = MIN(keylen, sizeof(md));
+
+		be32enc(counter, count);
+
+		g_luks_crypto_hmac_init_sha1(&startpoint, passphrase, passlen);
+		ctx = startpoint;
+		g_luks_crypto_hmac_update_sha1(&ctx, saltcount, sizeof(saltcount));
+		g_luks_crypto_hmac_final_sha1(&ctx, md, sizeof(md));
+		xor(keyp, md, bsize);
+
+		for(i = 1; i < iterations; i++) {
+			ctx = startpoint;
+			g_luks_crypto_hmac_update_sha1(&ctx, md, sizeof(md));
+			g_luks_crypto_hmac_final_sha1(&ctx, md, sizeof(md));
 			xor(keyp, md, bsize);
 		}
 	}
