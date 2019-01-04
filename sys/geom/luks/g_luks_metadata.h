@@ -307,7 +307,7 @@ af_splitted_size(size_t blocksize, unsigned int blocknumber)
 
 
 static __inline void
-xor(const char *block1, const char *block2, char *dst, size_t length)
+xor_af(const char *block1, const char *block2, char *dst, size_t length)
 {
 	size_t j;
 	for (j=0;j<length;j++){
@@ -327,10 +327,10 @@ af_split(const char *material, char *dst, size_t length, unsigned int stripes, c
 	bzero(dst,length);
 	for (i=0;i<stripes-1;i++){
 		arc4random_buf(dst+(i*length),length);
-		xor(dst+(i*length),lastblock,lastblock,length);
+		xor_af(dst+(i*length),lastblock,lastblock,length);
 		luks_hash(hashspec,lastblock,length,lastblock);	
 	}
-	xor(material,lastblock,dst+(stripes*length),length);
+	xor_af(material,lastblock,dst+(stripes*length),length);
 }
 
 
@@ -345,10 +345,10 @@ af_merge(const char *material, char *dst, size_t length, unsigned int stripes, c
 #endif
 
 	for (i=0;i<stripes-1;i++){
-		xor(material+(i*length),lastblock,lastblock,length);
+		xor_af(material+(i*length),lastblock,lastblock,length);
 		luks_hash(hashspec,lastblock,length,lastblock);	
 	}
-	xor(material+(stripes*length),lastblock,dst,length);
+	xor_af(material+(stripes*length),lastblock,dst,length);
 }
 
 
