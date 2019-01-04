@@ -157,7 +157,7 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 	unsigned char *mkey, unsigned int nkey )
 {
 
-	int error;
+	int error = 0;
 	size_t keymaterial_size = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[nkey].iterations);
 
 #ifdef _KERNEL
