@@ -319,8 +319,11 @@ static __inline void
 af_split(const char *material, char *dst, size_t length, unsigned int stripes, const char *hashspec)
 {
 	unsigned int i;
+#ifdef _KERNEL
+	char *lastblock = malloc(length, M_LUKS, M_WAITOK | M_ZERO);
+#else
 	char *lastblock = calloc(length,1);
-
+#endif
 	bzero(dst,length);
 	for (i=0;i<stripes-1;i++){
 		arc4random_buf(dst+(i*length),length);
@@ -335,7 +338,11 @@ static __inline void
 af_merge(const char *material, char *dst, size_t length, unsigned int stripes, const char *hashspec)
 {	
 	unsigned int i;
+#ifdef _KERNEL
+	char *lastblock = malloc(length, M_LUKS, M_WAITOK | M_ZERO);
+#else
 	char *lastblock = calloc(length,1);
+#endif
 
 	for (i=0;i<stripes-1;i++){
 		xor(material+(i*length),lastblock,lastblock,length);
