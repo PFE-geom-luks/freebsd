@@ -35,6 +35,7 @@
 #include <crypto/sha2/sha256.h>
 #include <crypto/sha2/sha512.h>
 #include <opencrypto/cryptodev.h>
+#include <g_luks_metadata.h>
 #ifdef _KERNEL
 #include <sys/bio.h>
 #include <sys/libkern.h>
@@ -662,7 +663,7 @@ luks_metadata_softc(struct g_luks_softc *sc, const struct g_luks_metadata *md,
 
 #ifdef _KERNEL
 int g_luks_read_metadata(struct g_class *mp, struct g_provider *pp,
-    struct g_luks_metadata *md);
+    struct g_luks_metadata_raw *md);
 struct g_geom *g_luks_create(struct gctl_req *req, struct g_class *mp,
     struct g_provider *bpp, const struct g_luks_metadata *md,
     const u_char *mkey, int nkey);

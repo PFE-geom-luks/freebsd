@@ -51,6 +51,7 @@ __FBSDID("$FreeBSD$");
 
 #include <geom/geom.h>
 #include <geom/luks/g_luks.h>
+#include <geom/luks/g_luks_metadata.h>
 #include <geom/luks/pkcs5v2.h>
 
 #include <crypto/intake.h>
@@ -618,7 +619,7 @@ again:
 
 int
 g_luks_read_metadata(struct g_class *mp, struct g_provider *pp,
-    struct g_luks_metadata *md)
+    struct g_luks_metadata_raw *md_raw)
 {
 	struct g_geom *gp;
 	struct g_consumer *cp;
@@ -645,12 +646,12 @@ g_luks_read_metadata(struct g_class *mp, struct g_provider *pp,
 	if (error != 0)
 		goto end;
 	g_topology_unlock();
-	buf = g_read_data(cp, pp->mediasize - pp->sectorsize, pp->sectorsize,
+	buf = g_read_data(cp, 0 , pp->sectorsize*4,
 	    &error);
 	g_topology_lock();
 	if (buf == NULL)
 		goto end;
-	error = luks_metadata_decode(buf, md);
+	error = luks_metadata_raw_decode(buf, md_raw);
 	if (error != 0)
 		goto end;
 	/* Metadata was read and decoded successfully. */
