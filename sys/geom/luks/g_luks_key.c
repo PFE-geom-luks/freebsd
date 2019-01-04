@@ -42,6 +42,8 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #include <geom/luks/g_luks.h>
+#include <geom/luks/pkcs5v2.h>
+#include <geom/luks/g_luks_metadata.h>
 
 #ifdef _KERNEL
 MALLOC_DECLARE(M_LUKS);
@@ -151,15 +153,20 @@ g_luks_mkey_decrypt(const struct g_luks_metadata *md, const unsigned char *key,
 
 int
 g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
-	const struct g_luks_metadata *md, const char *keymaterial, const unsigned char *passphrase,
+	const struct g_luks_metadata *md, unsigned char *keymaterial, const unsigned char *passphrase,
 	const size_t *passsize, unsigned char *mkey, unsigned int nkey )
 {
 
 	int error;
-	size_t keymaterial_size = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[i].iterations)
+	size_t keymaterial_size = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[nkey].iterations);
 
+#ifdef _KERNEL
 	char dkey = malloc(md_raw->md_keybytes, M_LUKS, M_WAITOK | M_ZERO);
-
+	char digest = malloc(LUKS_DIGESTSIZE,M_LUKS,M_WAITOK);
+#else
+	char *dkey = malloc(md_raw->md_keybytes);
+	char *digest = malloc(LUKS_DIGESTSIZE);
+#endif
 	switch(g_luks_hashstr2aalgo(md_raw->md_hashspec)){
 	case CRYPTO_SHA1_HMAC:
 
@@ -167,22 +174,21 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 
 		error = g_luks_crypto_decrypt(md->md_ealgo, keymaterial,
 		   keymaterial_size, dkey, sizeof(dkey));
-		bzero(dkey,sizeof(dkey));
+		bzero(dkey,sizeof(*dkey));
 		if (error != 0) {
 			return (error);
 		}
 
-		af_merge(keymaterial,dkey,sizeof(dkey),md_raw->keyslot[i].stripes,
+		af_merge(keymaterial,dkey,sizeof(dkey),md_raw->md_keyslot[nkey].stripes,
 				md_raw->md_hashspec);
 
-		char digest = malloc(LUKS_DIGESTSIZE,M_LUKS,M_WAITOK);
 
 		pkcs5v2_genkey_sha1(digest,LUKS_DIGESTSIZE,md_raw->md_mkdigestsalt,LUKS_SALTSIZE,dkey,md_raw->md_iterations);
 
-		if (memcmp(digest,md_raw->md_mkdigest) != 0){
+		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
 			return (-1);
 		}else{
-			bcopy(dkey,mkey,sizeof(dkey));
+			bcopy(dkey,mkey,sizeof(*dkey));
 			return 0;
 		}
 
