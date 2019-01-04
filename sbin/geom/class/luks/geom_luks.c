@@ -79,7 +79,6 @@ static void luks_version(struct gctl_req *req);
 static void luks_clear(struct gctl_req *req);
 static void luks_dump(struct gctl_req *req);
 static void luks_dump_raw(struct gctl_req *req);
-static void luks_test(struct gctl_req *req);
 
 static int luks_backup_create(struct gctl_req *req, const char *prov,
     const char *file);
@@ -275,7 +274,7 @@ struct g_command class_commands[] = {
 	{ "dump_raw", G_FLAG_VERBOSE, luks_main, G_NULL_OPTS,
 	    "[-v] prov ..."
 	},
-	{ "test", G_FLAG_VERBOSE | G_FLAG_LOADKLD, luks_main,
+	{ "test_passphrase", G_FLAG_VERBOSE | G_FLAG_LOADKLD, luks_main,
 	    {
 		G_OPT_SENTINEL
 	    },
@@ -351,8 +350,8 @@ luks_main(struct gctl_req *req, unsigned int flags)
 		luks_dump(req);
 	else if (strcmp(name, "dump_raw") == 0)
 		luks_dump_raw(req);
-	else if (strcmp(name, "test") == 0)
-		luks_test(req);
+	else if (strcmp(name, "test_passphrase") == 0)
+		luks_test_passphrase(req);
 	else if (strcmp(name, "clear") == 0)
 		luks_clear(req);
 	else
@@ -1787,7 +1786,7 @@ static int
 luks_metadata_raw_read(struct gctl_req *req, const char *prov,
     struct g_luks_metadata_raw *md)
 {
-	unsigned char sector[sizeof(struct g_luks_metadata_raw)];
+	unsigned char sector[sizeof(struct g_luks_metadata)];
 	int error;
 
 	if (g_get_sectorsize(prov) == 0) {
@@ -1867,16 +1866,30 @@ luks_dump_raw(struct gctl_req *req)
 
 
 static void
-luks_test(struct gctl_req *req)
+luks_test_passphrase(struct gctl_req *req)
 {
-	const char *test;
+	const char *prov;
+	char passbuf[PASSLEN];
 	int nargs;
+
+	passbuf[0] = '\0';
 
 	nargs = gctl_get_int(req, "nargs");
 	if (nargs != 1) {
 		gctl_error(req, "Invalid number of arguments.");
 		return;
 	}
-	test = gctl_get_ascii(req, "arg0");
-	gctl_issue(req);
+	prov = gctl_get_ascii(req, "arg0");
+
+	if (luks_genkey_passphrase_prompt(req, new, passbuf,
+	    sizeof(passbuf)) == -1) {
+		return (-1);
+	}
+
+	gctl_ro_param(req, "passphrase", sizeof(passbuf), passbuf);
+	if (gctl_issue(req) == NULL) {
+		if (verbose)
+			printf("Attached to %s.\n", prov);
+	}
+	bzero(passbuf, sizeof(passbuf));
 }

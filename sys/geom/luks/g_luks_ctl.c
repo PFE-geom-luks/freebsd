@@ -45,6 +45,7 @@ __FBSDID("$FreeBSD$");
 
 #include <geom/geom.h>
 #include <geom/luks/g_luks.h>
+#include <geom/luks/g_luks_metadata.h>
 
 
 MALLOC_DECLARE(M_LUKS);
@@ -1119,10 +1120,17 @@ g_luks_ctl_kill(struct gctl_req *req, struct g_class *mp)
 
 
 static void
-g_luks_ctl_test(struct gctl_req *req, struct g_class *mp)
+g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 {
-	int *nargs;
+	struct g_luks_metadata_raw md_raw;
+	struct g_luks_metadata md;
+	struct g_provider *pp;
 	const char *name;
+	u_char *passphrase, mkey[G_LUKS_DATAIVKEYLEN];
+	int *nargs;
+	int passsize, error, i;
+	u_int nkey = 0;
+
 	g_topology_assert();
 
 	nargs = gctl_get_paraml(req, "nargs", sizeof(*nargs));
@@ -1130,13 +1138,95 @@ g_luks_ctl_test(struct gctl_req *req, struct g_class *mp)
 		gctl_error(req, "No '%s' argument.", "nargs");
 		return;
 	}
-	
+	if (*nargs != 1) {
+		gctl_error(req, "Invalid number of arguments.");
+		return;
+	}
+
 	name = gctl_get_asciiparam(req, "arg0");
 	if (name == NULL) {
 		gctl_error(req, "No 'arg%u' argument.", 0);
 		return;
 	}
-	gctl_error(req,"Test : %s",name);
+	if (strncmp(name, "/dev/", strlen("/dev/")) == 0)
+		name += strlen("/dev/");
+	pp = g_provider_by_name(name);
+	if (pp == NULL) {
+		gctl_error(req, "Provider %s is invalid.", name);
+		return;
+	}
+	error = g_luks_read_metadata(mp, pp, &md_raw);
+	if (error != 0) {
+		gctl_error(req, "Cannot read metadata from %s (error=%d).",
+		    name, error);
+		return;
+	}
+
+	luks_metadata_raw_to_md(&md_raw,&md);
+
+	for (i=0;i<LUKS_NUMKEYS;i++) {
+		if(md_raw->md_keyslot[i].active	== LUKS_KEY_ENABLED) {
+			nkey++;
+		}
+	}
+
+	if (nkey == 0) {
+		bzero(&md_raw, sizeof(md_raw));
+		gctl_error(req, "No valid keys on %s.", pp->name);
+		return;
+	}
+
+	passphrase = gctl_get_param(req, "passphrase", &passsize);
+	if (passphrase == NULL || passsize != G_LUKS_PASSLEN) {
+		bzero(&md_raw, sizeof(md_raw));
+		gctl_error(req, "No '%s' argument.", "passphrase");
+		return;
+	}
+
+	size_t splitted_key_length;
+	splitted_key_length = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[1].stripes);
+
+	char keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
+
+	error = g_luks_read_keymaterial(mp,pp,start_sector,splitted_key_length,keymaterial);
+	if (error != 0) {
+		gctl_error(req, "Cannot read material from %s (error=%d).",
+		    name, error);
+		return;
+	}
+
+
+	error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, mkey, 1);
+	bzero(passphrase, sizeof(passphrase));
+	if (error == -1) {
+		bzero(&md_raw, sizeof(md_raw));
+		gctl_error(req, "Wrong passphrase for %s.", pp->name);
+		return;
+	} else if (error > 0) {
+		bzero(&md_raw, sizeof(md_raw));
+		gctl_error(req, "Cannot decrypt Master Key for %s (error=%d).",
+		    pp->name, error);
+		return;
+	} else {
+		gctl_error(req, "Master Key successfully decrypted");
+	}
+	G_LUKS_DEBUG(1, "Using Master Key %u for %s.", nkey, pp->name);
+
+	/*if (*detach && *readonly) {
+		bzero(&md_raw, sizeof(md_raw));
+		gctl_error(req, "Options -d and -r are mutually exclusive.");
+		return;
+	}
+	if (*detach)
+		md.md_flags |= G_LUKS_FLAG_WO_DETACH;
+	if (*readonly)
+		md.md_flags |= G_LUKS_FLAG_RO;
+	//g_luks_create(req, mp, pp, &md, mkey, nkey);
+	*/
+	bzero(mkey, sizeof(mkey));
+	bzero(&md_raw, sizeof(md_raw));
+	bzero(&md, sizeof(md));
+
 }
 
 void
@@ -1185,8 +1275,8 @@ g_luks_config(struct gctl_req *req, struct g_class *mp, const char *verb)
 		g_luks_ctl_resume(req, mp);
 	else if (strcmp(verb, "kill") == 0)
 		g_luks_ctl_kill(req, mp);
-	else if (strcmp(verb,"test") == 0)
-		g_luks_ctl_test(req,mp);
+	else if (strcomp(verb,"test_passphrase") == 0)
+		g_luks_ctl_test_passphrase(req, mp);
 	else
 		gctl_error(req, "Unknown verb.");
 }
