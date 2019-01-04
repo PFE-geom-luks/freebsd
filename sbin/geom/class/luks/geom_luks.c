@@ -79,6 +79,7 @@ static void luks_version(struct gctl_req *req);
 static void luks_clear(struct gctl_req *req);
 static void luks_dump(struct gctl_req *req);
 static void luks_dump_raw(struct gctl_req *req);
+static void luks_test_passphrase(struct gctl_req *req);
 
 static int luks_backup_create(struct gctl_req *req, const char *prov,
     const char *file);
@@ -1869,7 +1870,7 @@ static void
 luks_test_passphrase(struct gctl_req *req)
 {
 	const char *prov;
-	char passbuf[PASSLEN];
+	char passbuf[G_LUKS_PASSLEN];
 	int nargs;
 
 	passbuf[0] = '\0';
@@ -1881,9 +1882,9 @@ luks_test_passphrase(struct gctl_req *req)
 	}
 	prov = gctl_get_ascii(req, "arg0");
 
-	if (luks_genkey_passphrase_prompt(req, new, passbuf,
+	if (luks_genkey_passphrase_prompt(req, false, passbuf,
 	    sizeof(passbuf)) == -1) {
-		return (-1);
+		return;
 	}
 
 	gctl_ro_param(req, "passphrase", sizeof(passbuf), passbuf);
