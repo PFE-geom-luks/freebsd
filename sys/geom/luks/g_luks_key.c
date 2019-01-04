@@ -149,6 +149,53 @@ g_luks_mkey_decrypt(const struct g_luks_metadata *md, const unsigned char *key,
 	return (-1);
 }
 
+int
+g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
+	const struct g_luks_metadata *md, const char *keymaterial, const unsigned char *passphrase,
+	const size_t *passsize, unsigned char *mkey, unsigned int nkey )
+{
+
+	int error;
+	size_t keymaterial_size = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[i].iterations)
+
+	char dkey = malloc(md_raw->md_keybytes, M_LUKS, M_WAITOK | M_ZERO);
+
+	switch(g_luks_hashstr2aalgo(md_raw->md_hashspec)){
+	case CRYPTO_SHA1_HMAC:
+
+		pkcs5v2_genkey_sha1(dkey,sizeof(dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
+
+		error = g_luks_crypto_decrypt(md->md_ealgo, keymaterial,
+		   keymaterial_size, dkey, sizeof(dkey));
+		bzero(dkey,sizeof(dkey));
+		if (error != 0) {
+			return (error);
+		}
+
+		af_merge(keymaterial,dkey,sizeof(dkey),md_raw->keyslot[i].stripes,
+				md_raw->md_hashspec);
+
+		char digest = malloc(LUKS_DIGESTSIZE,M_LUKS,M_WAITOK);
+
+		pkcs5v2_genkey_sha1(digest,LUKS_DIGESTSIZE,md_raw->md_mkdigestsalt,LUKS_SALTSIZE,dkey,md_raw->md_iterations);
+
+		if (memcmp(digest,md_raw->md_mkdigest) != 0){
+			return (-1);
+		}else{
+			bcopy(dkey,mkey,sizeof(dkey));
+			return 0;
+		}
+
+	case CRYPTO_RIPEMD160_HMAC:
+	case CRYPTO_SHA2_256_HMAC:
+		pkcs5v2_genkey_sha256(dkey,sizeof(dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
+	case CRYPTO_SHA2_512_HMAC:
+		pkcs5v2_genkey(dkey,sizeof(dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
+	}
+
+	return 1;
+}
+
 /*
  * Encrypt the Master-Key and calculate HMAC to be able to verify it in the
  * future.
