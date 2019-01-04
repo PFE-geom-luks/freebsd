@@ -34,8 +34,8 @@
 #include <sys/malloc.h>
 #include <crypto/sha2/sha256.h>
 #include <crypto/sha2/sha512.h>
+#include <crypto/sha1.h>
 #include <opencrypto/cryptodev.h>
-#include <g_luks_metadata.h>
 #ifdef _KERNEL
 #include <sys/bio.h>
 #include <sys/libkern.h>
