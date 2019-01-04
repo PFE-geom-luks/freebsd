@@ -74,9 +74,6 @@
 #define LUKS_KEY_ENABLED	0x00AC71F3
 
 #define G_LUKS_PASSLEN		1024
-#define SHA256_MDLEN		32
-#define SHA1_MDLEN		20
-#define RIPEMD160_MDLEN		20
 
 
 #ifdef _KERNEL
