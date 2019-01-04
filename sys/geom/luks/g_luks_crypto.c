@@ -202,11 +202,6 @@ int
 g_luks_crypto_encrypt(u_int algo, u_char *data, size_t datasize,
     const u_char *key, size_t keysize)
 {
-
-	/* We prefer AES-CBC for metadata protection. */
-	if (algo == CRYPTO_AES_XTS)
-		algo = CRYPTO_AES_CBC;
-
 	return (g_luks_crypto_cipher(algo, 1, data, datasize, key, keysize));
 }
 
@@ -214,10 +209,5 @@ int
 g_luks_crypto_decrypt(u_int algo, u_char *data, size_t datasize,
     const u_char *key, size_t keysize)
 {
-
-	/* We prefer AES-CBC for metadata protection. */
-	if (algo == CRYPTO_AES_XTS)
-		algo = CRYPTO_AES_CBC;
-
 	return (g_luks_crypto_cipher(algo, 0, data, datasize, key, keysize));
 }
