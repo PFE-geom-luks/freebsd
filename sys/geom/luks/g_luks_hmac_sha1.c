@@ -46,6 +46,9 @@ __FBSDID("$FreeBSD$");
 #include <geom/luks/g_luks.h>
 #include <geom/luks/g_luks_metadata.h>
 
+
+#ifdef _KERNEL
+
 void
 g_luks_crypto_hmac_init_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *hkey,
     size_t hkeylen)
@@ -109,6 +112,75 @@ g_luks_crypto_hmac_final_sha1(struct hmac_sha1_ctx *ctx, uint8_t *md, size_t mds
 	bcopy(digest, md, mdsize);
 	explicit_bzero(digest, sizeof(digest));
 }
+
+
+#else
+
+void
+g_luks_crypto_hmac_init_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *hkey,
+    size_t hkeylen)
+{
+	u_char k_ipad[64], k_opad[64], key[64];
+	SHA_CTX lctx;
+	u_int i;
+
+	bzero(key, sizeof(key));
+	if (hkeylen == 0)
+		; /* do nothing */
+	else if (hkeylen <= 64)
+		bcopy(hkey, key, hkeylen);
+	else {
+		/* If key is longer than 64 bytes reset it to key = SHA1(key). */
+		SHA1_Init(&lctx);
+		SHA1_Update(&lctx, hkey, hkeylen);
+		SHA1_Final(key, &lctx);
+	}
+
+	/* XOR key with ipad and opad values. */
+	for (i = 0; i < sizeof(key); i++) {
+		k_ipad[i] = key[i] ^ 0x36;
+		k_opad[i] = key[i] ^ 0x5c;
+	}
+	explicit_bzero(key, sizeof(key));
+	/* Start inner SHA1. */
+	SHA1_Init(&ctx->innerctx);
+	SHA1_Update(&ctx->innerctx, k_ipad, sizeof(k_ipad));
+	explicit_bzero(k_ipad, sizeof(k_ipad));
+	/* Start outer SHA1. */
+	SHA1_Init(&ctx->outerctx);
+	SHA1_Update(&ctx->outerctx, k_opad, sizeof(k_opad));
+	explicit_bzero(k_opad, sizeof(k_opad));
+}
+
+void
+g_luks_crypto_hmac_update_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *data,
+    size_t datasize)
+{
+
+	SHA1_Update(&ctx->innerctx, data, datasize);
+}
+
+void
+g_luks_crypto_hmac_final_sha1(struct hmac_sha1_ctx *ctx, uint8_t *md, size_t mdsize)
+{
+	u_char digest[SHA1_MDLEN];
+
+	/* Complete inner hash */
+	SHA1_Final(digest, &ctx->innerctx);
+
+	/* Complete outer hash */
+	SHA1_Update(&ctx->outerctx, digest, sizeof(digest));
+	SHA1_Final(digest, &ctx->outerctx);
+
+	explicit_bzero(ctx, sizeof(*ctx));
+	/* mdsize == 0 means "Give me the whole hash!" */
+	if (mdsize == 0)
+		mdsize = SHA1_MDLEN;
+	bcopy(digest, md, mdsize);
+	explicit_bzero(digest, sizeof(digest));
+}
+
+#endif
 
 void
 g_luks_crypto_hmac_sha1(const uint8_t *hkey, size_t hkeysize, const uint8_t *data,

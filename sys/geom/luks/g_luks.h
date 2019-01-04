@@ -47,6 +47,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sha.h>
 #include <strings.h>
 #endif
 #include <sys/queue.h>
@@ -706,9 +708,15 @@ struct hmac_ctx {
 	SHA512_CTX	innerctx;
 	SHA512_CTX	outerctx;
 };
+
 struct hmac_sha1_ctx {
+#ifdef _KERNEL
 	SHA1_CTX	innerctx;
 	SHA1_CTX	outerctx;
+#else
+	SHA_CTX	innerctx;
+	SHA_CTX	outerctx;
+#endif
 };
 struct hmac_sha256_ctx {
 	SHA256_CTX	innerctx;
