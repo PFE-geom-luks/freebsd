@@ -279,7 +279,7 @@ struct g_command class_commands[] = {
 	    {
 		G_OPT_SENTINEL
 	    },
-	    "[-v]"
+	    "[-v] prov"
 	},
 	G_CMD_SENTINEL
 };
