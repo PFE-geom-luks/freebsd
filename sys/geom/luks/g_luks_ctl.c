@@ -1200,7 +1200,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 
 	char *keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
 
-	error = g_luks_read_keymaterial(mp,pp,start_sector,splitted_key_length,keymaterial);
+	error = g_luks_read_keymaterial(mp,pp,md_raw.md_keyslot[1].keymaterialoffset,splitted_key_length,keymaterial);
 	if (error != 0) {
 		gctl_error(req, "Cannot read material from %s (error=%d).",
 		    name, error);
