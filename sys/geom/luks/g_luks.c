@@ -668,6 +668,56 @@ end:
 	return (error);
 }
 
+
+int
+g_luks_read_keymaterial(struct g_class *mp, struct g_provider *pp,
+    int start_sector, size_t splitted_key_size, char *keymaterial)
+{
+	struct g_geom *gp;
+	struct g_consumer *cp;
+	u_char *buf = NULL;
+	int error;
+
+	g_topology_assert();
+
+	gp = g_new_geomf(mp, "luks:taste");
+	gp->start = g_luks_start;
+	gp->access = g_std_access;
+	/*
+	 * g_luks_read_metadata() is always called from the event thread.
+	 * Our geom is created and destroyed in the same event, so there
+	 * could be no orphan nor spoil event in the meantime.
+	 */
+	gp->orphan = g_luks_orphan_spoil_assert;
+	gp->spoiled = g_luks_orphan_spoil_assert;
+	cp = g_new_consumer(gp);
+	error = g_attach(cp, pp);
+	if (error != 0)
+		goto end;
+	error = g_access(cp, 1, 0, 0);
+	if (error != 0)
+		goto end;
+	g_topology_unlock();
+	buf = g_read_data(cp,pp->sectorsize*start_sector,splitted_key_size,
+	    &error);
+	g_topology_lock();
+	if (buf == NULL)
+		goto end;
+	/* Metadata was read and decoded successfully. */
+	bcopy(buf,keymaterial,splitted_key_size);
+end:
+	if (buf != NULL)
+		g_free(buf);
+	if (cp->provider != NULL) {
+		if (cp->acr == 1)
+			g_access(cp, -1, 0, 0);
+		g_detach(cp);
+	}
+	g_destroy_consumer(cp);
+	g_destroy_geom(gp);
+	return (error);
+}
+
 /*
  * The function is called when we had last close on provider and user requested
  * to close it when this situation occur.
