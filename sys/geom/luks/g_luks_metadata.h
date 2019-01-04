@@ -51,6 +51,8 @@
 #include <string.h>
 #include <strings.h>
 #include <sha.h>
+#include <stdlib.h>
+#include <malloc_np.h>
 #endif
 #include <sys/queue.h>
 #include <sys/tree.h>
