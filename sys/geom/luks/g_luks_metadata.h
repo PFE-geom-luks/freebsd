@@ -339,7 +339,11 @@ af_split(const char *material, char *dst, size_t length, unsigned int stripes, c
 #endif
 	bzero(dst,length);
 	for (i=0;i<stripes-1;i++){
+#ifdef _KERNEL
+		arc4rand(dst+(i*length),length,0);
+#else
 		arc4random_buf(dst+(i*length),length);
+#endif
 		xor_af(dst+(i*length),lastblock,lastblock,length);
 		luks_hash(hashspec,lastblock,length,lastblock);	
 	}
