@@ -414,4 +414,10 @@ void g_luks_crypto_hmac_update_sha256(struct hmac_ctx *ctx, const uint8_t *data,
 void g_luks_crypto_hmac_final_sha256(struct hmac_ctx *ctx, uint8_t *md, size_t mdsize);
 void g_luks_crypto_hmac_sha256(const uint8_t *hkey, size_t hkeysize,
     const uint8_t *data, size_t datasize, uint8_t *md, size_t mdsize);
+
+#ifdef _KERNEL
+int g_luks_read_metadata(struct g_class *mp, struct g_provider *pp,
+    struct g_luks_metadata_raw *md);
+#endif
+
 #endif

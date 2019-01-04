@@ -1082,6 +1082,7 @@ g_luks_keyfiles_clear(const char *provider)
 static struct g_geom *
 g_luks_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 {
+	struct g_luks_metadata_raw md_raw;
 	struct g_luks_metadata md;
 	struct g_geom *gp;
 	struct hmac_ctx ctx;
@@ -1099,10 +1100,11 @@ g_luks_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 
 	G_LUKS_DEBUG(3, "Tasting %s.", pp->name);
 
-	error = g_luks_read_metadata(mp, pp, &md);
+	error = g_luks_read_metadata(mp, pp, &md_raw);
 	if (error != 0)
 		return (NULL);
 	gp = NULL;
+	luks_metadata_raw_to_md(&md_raw,&md);
 
 	if (strcmp(md.md_magic, G_LUKS_MAGIC) != 0)
 		return (NULL);

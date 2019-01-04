@@ -662,8 +662,6 @@ luks_metadata_softc(struct g_luks_softc *sc, const struct g_luks_metadata *md,
 }
 
 #ifdef _KERNEL
-int g_luks_read_metadata(struct g_class *mp, struct g_provider *pp,
-    struct g_luks_metadata_raw *md);
 int g_luks_read_keymaterial(struct g_class *mp, struct g_provider *pp,
     int start_sector, size_t splitted_key_size, char *keymaterial);
 struct g_geom *g_luks_create(struct gctl_req *req, struct g_class *mp,

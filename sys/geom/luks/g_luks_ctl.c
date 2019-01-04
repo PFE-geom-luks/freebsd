@@ -55,6 +55,7 @@ static void
 g_luks_ctl_attach(struct gctl_req *req, struct g_class *mp)
 {
 	struct g_luks_metadata md;
+	struct g_luks_metadata_raw md_raw;
 	struct g_provider *pp;
 	const char *name;
 	u_char *key, mkey[G_LUKS_DATAIVKEYLEN];
@@ -98,12 +99,13 @@ g_luks_ctl_attach(struct gctl_req *req, struct g_class *mp)
 		gctl_error(req, "Provider %s is invalid.", name);
 		return;
 	}
-	error = g_luks_read_metadata(mp, pp, &md);
+	error = g_luks_read_metadata(mp, pp, &md_raw);
 	if (error != 0) {
 		gctl_error(req, "Cannot read metadata from %s (error=%d).",
 		    name, error);
 		return;
 	}
+	luks_metadata_raw_to_md(&md_raw,&md);
 	if (md.md_keys == 0x00) {
 		bzero(&md, sizeof(md));
 		gctl_error(req, "No valid keys on %s.", pp->name);
@@ -371,6 +373,7 @@ static void
 g_luks_ctl_configure(struct gctl_req *req, struct g_class *mp)
 {
 	struct g_luks_softc *sc;
+	struct g_luks_metadata_raw md_raw;
 	struct g_luks_metadata md;
 	struct g_provider *pp;
 	struct g_consumer *cp;
@@ -528,13 +531,14 @@ g_luks_ctl_configure(struct gctl_req *req, struct g_class *mp)
 			 */
 			cp = LIST_FIRST(&sc->sc_geom->consumer);
 			pp = cp->provider;
-			error = g_luks_read_metadata(mp, pp, &md);
+			error = g_luks_read_metadata(mp, pp, &md_raw);
 			if (error != 0) {
 			    gctl_error(req,
 				"Cannot read metadata from %s (error=%d).",
 				prov, error);
 			    continue;
 			}
+			luks_metadata_raw_to_md(&md_raw,&md);
 		}
 
 		if (*boot) {
@@ -593,6 +597,7 @@ static void
 g_luks_ctl_setkey(struct gctl_req *req, struct g_class *mp)
 {
 	struct g_luks_softc *sc;
+	struct g_luks_metadata_raw md_raw;
 	struct g_luks_metadata md;
 	struct g_provider *pp;
 	struct g_consumer *cp;
@@ -620,12 +625,13 @@ g_luks_ctl_setkey(struct gctl_req *req, struct g_class *mp)
 	cp = LIST_FIRST(&sc->sc_geom->consumer);
 	pp = cp->provider;
 
-	error = g_luks_read_metadata(mp, pp, &md);
+	error = g_luks_read_metadata(mp, pp, &md_raw);
 	if (error != 0) {
 		gctl_error(req, "Cannot read metadata from %s (error=%d).",
 		    name, error);
 		return;
 	}
+	luks_metadata_raw_to_md(&md_raw,&md);
 
 	valp = gctl_get_paraml(req, "keyno", sizeof(*valp));
 	if (valp == NULL) {
@@ -704,6 +710,7 @@ static void
 g_luks_ctl_delkey(struct gctl_req *req, struct g_class *mp)
 {
 	struct g_luks_softc *sc;
+	struct g_luks_metadata_raw md_raw;
 	struct g_luks_metadata md;
 	struct g_provider *pp;
 	struct g_consumer *cp;
@@ -735,12 +742,13 @@ g_luks_ctl_delkey(struct gctl_req *req, struct g_class *mp)
 	cp = LIST_FIRST(&sc->sc_geom->consumer);
 	pp = cp->provider;
 
-	error = g_luks_read_metadata(mp, pp, &md);
+	error = g_luks_read_metadata(mp, pp, &md_raw);
 	if (error != 0) {
 		gctl_error(req, "Cannot read metadata from %s (error=%d).",
 		    name, error);
 		return;
 	}
+	luks_metadata_raw_to_md(&md_raw,&md);
 
 	all = gctl_get_paraml(req, "all", sizeof(*all));
 	if (all == NULL) {
@@ -925,6 +933,7 @@ g_luks_ctl_suspend(struct gctl_req *req, struct g_class *mp)
 static void
 g_luks_ctl_resume(struct gctl_req *req, struct g_class *mp)
 {
+	struct g_luks_metadata_raw md_raw;
 	struct g_luks_metadata md;
 	struct g_luks_softc *sc;
 	struct g_provider *pp;
@@ -958,12 +967,15 @@ g_luks_ctl_resume(struct gctl_req *req, struct g_class *mp)
 	}
 	cp = LIST_FIRST(&sc->sc_geom->consumer);
 	pp = cp->provider;
-	error = g_luks_read_metadata(mp, pp, &md);
+	error = g_luks_read_metadata(mp, pp, &md_raw);
 	if (error != 0) {
 		gctl_error(req, "Cannot read metadata from %s (error=%d).",
 		    name, error);
 		return;
 	}
+	
+	luks_metadata_raw_to_md(&md_raw,&md);
+
 	if (md.md_keys == 0x00) {
 		bzero(&md, sizeof(md));
 		gctl_error(req, "No valid keys on %s.", pp->name);
