@@ -345,6 +345,38 @@ af_merge(const char *material, char *dst, size_t length, unsigned int stripes, c
 }
 
 
+
+static __inline u_int
+g_luks_hashstr2aalgo(const char *hashspec)
+{
+        if (strcasecmp("sha1", hashspec) == 0)
+                return (CRYPTO_SHA1_HMAC);
+        else if (strcasecmp("ripemd160", hashspec) == 0)
+                return (CRYPTO_RIPEMD160_HMAC);
+        else if (strcasecmp("sha256", hashspec) == 0)
+                return (CRYPTO_SHA2_256_HMAC);
+        else if (strcasecmp("sha512", hashspec) == 0)
+                return (CRYPTO_SHA2_512_HMAC);
+        return (CRYPTO_ALGORITHM_MIN - 1);
+}
+
+static __inline u_int
+g_luks_hashlen_hmac(int aalgo)
+{
+	switch (algo) {
+	case CRYPTO_SHA1_HMAC:
+		return SHA1_MDLEN;
+	case CRYPTO_RIPEMD160_HMAC:
+		return RIPEMD160_MDLEN;
+	case CRYPTO_SHA2_256_HMAC:
+		return SHA256_MDLEN;
+	case CRYPTO_SHA2_512_HMAC:
+		return SHA512_MDLEN;
+	}
+	return (0);
+
+}
+
 void g_luks_crypto_hmac_init_sha1(struct hmac_ctx *ctx, const uint8_t *hkey,
     size_t hkeylen);
 void g_luks_crypto_hmac_update_sha1(struct hmac_ctx *ctx, const uint8_t *data,
