@@ -702,6 +702,15 @@ struct hmac_ctx {
 	SHA512_CTX	innerctx;
 	SHA512_CTX	outerctx;
 };
+struct hmac_sha1_ctx {
+	SHA1_CTX	innerctx;
+	SHA1_CTX	outerctx;
+};
+struct hmac_sha256_ctx {
+	SHA256_CTX	innerctx;
+	SHA256_CTX	outerctx;
+};
+
 
 void g_luks_crypto_hmac_init(struct hmac_ctx *ctx, const uint8_t *hkey,
     size_t hkeylen);

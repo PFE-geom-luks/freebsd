@@ -46,7 +46,7 @@ __FBSDID("$FreeBSD$");
 #include <geom/luks/g_luks.h>
 
 void
-g_luks_crypto_hmac_init_sha1(struct hmac_ctx *ctx, const uint8_t *hkey,
+g_luks_crypto_hmac_init_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *hkey,
     size_t hkeylen)
 {
 	u_char k_ipad[64], k_opad[64], key[64];
@@ -82,7 +82,7 @@ g_luks_crypto_hmac_init_sha1(struct hmac_ctx *ctx, const uint8_t *hkey,
 }
 
 void
-g_luks_crypto_hmac_update_sha1(struct hmac_ctx *ctx, const uint8_t *data,
+g_luks_crypto_hmac_update_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *data,
     size_t datasize)
 {
 
@@ -90,7 +90,7 @@ g_luks_crypto_hmac_update_sha1(struct hmac_ctx *ctx, const uint8_t *data,
 }
 
 void
-g_luks_crypto_hmac_final_sha1(struct hmac_ctx *ctx, uint8_t *md, size_t mdsize)
+g_luks_crypto_hmac_final_sha1(struct hmac_sha1_ctx *ctx, uint8_t *md, size_t mdsize)
 {
 	u_char digest[SHA1_MDLEN];
 
@@ -113,7 +113,7 @@ void
 g_luks_crypto_hmac_sha1(const uint8_t *hkey, size_t hkeysize, const uint8_t *data,
     size_t datasize, uint8_t *md, size_t mdsize)
 {
-	struct hmac_ctx ctx;
+	struct hmac_sha1_ctx ctx;
 
 	g_luks_crypto_hmac_init_sha1(&ctx, hkey, hkeysize);
 	g_luks_crypto_hmac_update_sha1(&ctx, data, datasize);
