@@ -78,6 +78,11 @@
 #define SHA1_MDLEN		20
 #define RIPEMD160_MDLEN		20
 
+
+#ifdef _KERNEL
+MALLOC_DECLARE(M_LUKS);
+#endif
+
 struct g_luks_metadata_raw {
 	char 				md_magic[LUKS_MAGIC_L];			/* Magic value. */
 	uint16_t			md_version;				/* Version number. */

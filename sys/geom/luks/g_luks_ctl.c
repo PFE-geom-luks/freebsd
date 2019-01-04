@@ -1198,7 +1198,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	size_t splitted_key_length;
 	splitted_key_length = af_splitted_size(md_raw.md_keybytes,md_raw.md_keyslot[1].stripes);
 
-	char keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
+	char *keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
 
 	error = g_luks_read_keymaterial(mp,pp,start_sector,splitted_key_length,keymaterial);
 	if (error != 0) {
@@ -1209,7 +1209,9 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 
 
 	error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, mkey, 1);
-	bzero(passphrase, sizeof(passphrase));
+	bzero(passphrase, sizeof(*passphrase));
+	bzero(keymaterial, sizeof(*keymaterial));
+	free(keymaterial,M_LUKS);
 	if (error == -1) {
 		bzero(&md_raw, sizeof(md_raw));
 		gctl_error(req, "Wrong passphrase for %s.", pp->name);

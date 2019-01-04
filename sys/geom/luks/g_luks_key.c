@@ -161,8 +161,8 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 	size_t keymaterial_size = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[nkey].iterations);
 
 #ifdef _KERNEL
-	char dkey = malloc(md_raw->md_keybytes, M_LUKS, M_WAITOK | M_ZERO);
-	char digest = malloc(LUKS_DIGESTSIZE,M_LUKS,M_WAITOK);
+	char *dkey = malloc(md_raw->md_keybytes, M_LUKS, M_WAITOK | M_ZERO);
+	char *digest = malloc(LUKS_DIGESTSIZE,M_LUKS,M_WAITOK);
 #else
 	char *dkey = malloc(md_raw->md_keybytes);
 	char *digest = malloc(LUKS_DIGESTSIZE);
