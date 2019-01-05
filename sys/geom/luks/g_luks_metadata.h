@@ -263,6 +263,8 @@ g_luks_cipher2ealgo(const char *name, const char *mode)
 static __inline void
 luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_metadata *md)
 {
+	uint8_t keys = 0;
+
 	bcopy(md_raw->md_magic,md->md_magic,sizeof(md->md_magic));
 	md->md_version = G_LUKS_VERSION_04;
 	md->md_ealgo = g_luks_cipher2ealgo(md_raw->md_ciphername, md_raw->md_ciphermode);
@@ -271,7 +273,20 @@ luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_
 	md->md_iterations = md_raw->md_iterations;
 	bcopy(md_raw->md_mkdigestsalt,md->md_salt,sizeof(md->md_salt));
 
+	// We only have one key available for all the data
+	md->md_flags = G_LUKS_FLAG_SINGLE_KEY;
+	// TODO: G_LUKS_FLAG_FIRST_KEY ???
 
+	for (int i = 0; i < LUKS_NUMKEYS; ++i)
+		if (md_raw->md_keyslot[i].active == LUKS_KEY_ENABLED)
+			++keys;
+	md->md_keys = keys;
+
+	md->md_aalgo = NULL;
+	md->md_hash = NULL;
+
+	// TODO: md->md_provsize
+	// TODO: md->md_mkeys
 }
 
 
