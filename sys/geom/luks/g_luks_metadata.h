@@ -282,8 +282,8 @@ luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_
 			++keys;
 	md->md_keys = keys;
 
-	md->md_aalgo = NULL;
-	md->md_hash = NULL;
+	//md->md_aalgo = NULL;
+	//md->md_hash = NULL;
 
 	// TODO: md->md_provsize
 	// TODO: md->md_mkeys
