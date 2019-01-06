@@ -1138,7 +1138,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	struct g_luks_metadata md;
 	struct g_provider *pp;
 	const char *name;
-	u_char *passphrase, mkey[G_LUKS_DATAIVKEYLEN];
+	u_char *passphrase, *mkey=NULL;
 	int *nargs;
 	int passsize, error, i;
 	u_int nkey = 0;
@@ -1196,19 +1196,17 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	}
 
 	size_t splitted_key_length;
-	splitted_key_length = af_splitted_size(md_raw.md_keybytes,md_raw.md_keyslot[1].stripes);
+	splitted_key_length = af_splitted_size(md_raw.md_keybytes,md_raw.md_keyslot[0].stripes) * pp->sectorsize;
 
 	char *keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
-
-	error = g_luks_read_keymaterial(mp,pp,md_raw.md_keyslot[1].keymaterialoffset,splitted_key_length,keymaterial);
+	error = g_luks_read_keymaterial(mp,pp,md_raw.md_keyslot[0].keymaterialoffset,splitted_key_length,keymaterial);
 	if (error != 0) {
 		gctl_error(req, "Cannot read material from %s (error=%d).",
 		    name, error);
 		return;
 	}
 
-
-	error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, mkey, 1);
+	error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, mkey, 0);
 	bzero(passphrase, sizeof(*passphrase));
 	bzero(keymaterial, sizeof(*keymaterial));
 	free(keymaterial,M_LUKS);
@@ -1224,7 +1222,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	} else {
 		gctl_error(req, "Master Key successfully decrypted");
 	}
-	G_LUKS_DEBUG(1, "Using Master Key %u for %s.", nkey, pp->name);
+	G_LUKS_DEBUG(1, "Using Master Key %u for %s.", 0 , pp->name);
 
 	/*if (*detach && *readonly) {
 		bzero(&md_raw, sizeof(md_raw));
@@ -1237,9 +1235,11 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 		md.md_flags |= G_LUKS_FLAG_RO;
 	//g_luks_create(req, mp, pp, &md, mkey, nkey);
 	*/
-	bzero(mkey, sizeof(mkey));
+	bzero(mkey, md_raw.md_keybytes);
+	free(mkey,M_LUKS);
 	bzero(&md_raw, sizeof(md_raw));
 	bzero(&md, sizeof(md));
+	return;
 
 }
 

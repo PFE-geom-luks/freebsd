@@ -158,7 +158,7 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 {
 
 	int error = 0;
-	size_t keymaterial_size = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[nkey].iterations);
+	size_t keymaterial_size = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes)*LUKS_SECTOR_SIZE;
 
 #ifdef _KERNEL
 	char *dkey = malloc(md_raw->md_keybytes, M_LUKS, M_WAITOK | M_ZERO);
@@ -170,16 +170,16 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 	switch(g_luks_hashstr2aalgo(md_raw->md_hashspec)){
 	case CRYPTO_SHA1_HMAC:
 
-		pkcs5v2_genkey_sha1(dkey,sizeof(dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
+		pkcs5v2_genkey_sha1(dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
 
 		error = g_luks_crypto_decrypt(md->md_ealgo, keymaterial,
-		   keymaterial_size, dkey, sizeof(dkey));
-		bzero(dkey,sizeof(*dkey));
+		   keymaterial_size, dkey, md_raw->md_keybytes*8);
+		bzero(dkey,md_raw->md_keybytes);
 		if (error != 0) {
 			return (error);
 		}
 
-		af_merge(keymaterial,dkey,sizeof(dkey),md_raw->md_keyslot[nkey].stripes,
+		af_merge(keymaterial,dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes,
 				md_raw->md_hashspec);
 
 
@@ -188,25 +188,45 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
 			error = -1;
 		}else{
-			bcopy(dkey,mkey,sizeof(*dkey));
+			mkey = dkey ;
 		}
 
 
 	case CRYPTO_RIPEMD160_HMAC:
 	case CRYPTO_SHA2_256_HMAC:
-		pkcs5v2_genkey_sha256(dkey,sizeof(dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
+		pkcs5v2_genkey_sha256(dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
+
+		error = g_luks_crypto_decrypt(md->md_ealgo, keymaterial,
+		   keymaterial_size, dkey, md_raw->md_keybytes*8);
+		G_LUKS_DEBUG(1,"error : %d",error);
+		bzero(dkey,md_raw->md_keybytes);
+		if (error != 0) {
+			return (error);
+		}
+
+		af_merge(keymaterial,dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes,
+				md_raw->md_hashspec);
+
+
+		pkcs5v2_genkey_sha256(digest,LUKS_DIGESTSIZE,md_raw->md_mkdigestsalt,LUKS_SALTSIZE,dkey,md_raw->md_iterations);
+
+		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
+			error = -1;
+		}else{
+			mkey = dkey;
+		}
 	case CRYPTO_SHA2_512_HMAC:
-		pkcs5v2_genkey(dkey,sizeof(dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
+		pkcs5v2_genkey(dkey,sizeof(*dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
 	}
 
-	bzero(dkey,sizeof(*dkey));
+	//bzero(dkey,sizeof(*dkey));
 	bzero(digest,sizeof(*digest));
 
 #ifdef _KERNEL
-	free(dkey,M_LUKS);
+	//free(dkey,M_LUKS);
 	free(digest,M_LUKS);
 #else
-	free(dkey);
+	//free(dkey);
 	free(digest);
 #endif
 	return error;
