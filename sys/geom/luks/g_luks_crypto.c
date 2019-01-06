@@ -66,9 +66,6 @@ g_luks_crypto_cipher(u_int algo, int enc, u_char *data, size_t datasize,
 	u_char *p;
 	int error;
 
-	KASSERT(algo != CRYPTO_AES_XTS,
-	    ("%s: CRYPTO_AES_XTS unexpected here", __func__));
-
 	bzero(&cri, sizeof(cri));
 	cri.cri_alg = algo;
 	cri.cri_key = __DECONST(void *, key);
