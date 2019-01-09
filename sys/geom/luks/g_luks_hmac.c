@@ -160,3 +160,24 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
 		break;
 	}
 }
+
+
+
+void
+g_luks_crypto_ivgen_ealgo(uint16_t algo, off_t offset, u_char *iv,
+    size_t size)
+{
+	uint8_t off[8];
+
+	switch (algo) {
+	case CRYPTO_AES_XTS:
+		le64enc(off, (uint64_t)offset);
+		bcopy(off, iv, sizeof(off));
+		bzero(iv + sizeof(off), size - sizeof(off));
+		break;
+	default:
+		// TODO: handle the case with aes-cbc-plain
+		// assert(0); // ???
+		break;
+	}
+}
