@@ -158,7 +158,7 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 {
 
 	int error = 0;
-	int i;
+	size_t i;
 
 	size_t keymaterial_blocks = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes);
 	size_t keymaterial_size = keymaterial_blocks*LUKS_SECTOR_SIZE;
