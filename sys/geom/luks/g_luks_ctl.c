@@ -1219,8 +1219,6 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 		gctl_error(req, "Cannot decrypt Master Key for %s (error=%d).",
 		    pp->name, error);
 		return;
-	} else {
-		gctl_error(req, "Master Key successfully decrypted");
 	}
 	G_LUKS_DEBUG(1, "Using Master Key %u for %s.", 0 , pp->name);
 
@@ -1239,7 +1237,6 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	free(mkey,M_LUKS);
 	bzero(&md_raw, sizeof(md_raw));
 	bzero(&md, sizeof(md));
-	return;
 
 }
 
