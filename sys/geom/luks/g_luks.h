@@ -690,6 +690,7 @@ void g_luks_auth_run(struct g_luks_worker *wr, struct bio *bp);
 void g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
     size_t size);
 
+void g_luks_crypto_ivgen_ealgo(uint16_t algo, off_t offset, u_char *iv,size_t size);
 void g_luks_mkey_hmac(unsigned char *mkey, const unsigned char *key);
 int g_luks_mkey_decrypt(const struct g_luks_metadata *md,
     const unsigned char *key, unsigned char *mkey, unsigned *nkeyp);

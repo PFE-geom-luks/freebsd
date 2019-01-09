@@ -151,6 +151,7 @@ g_luks_mkey_decrypt(const struct g_luks_metadata *md, const unsigned char *key,
 	return (-1);
 }
 
+#ifdef _KERNEL
 int
 g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 	const struct g_luks_metadata *md, unsigned char *keymaterial, const unsigned char *passphrase,
@@ -232,7 +233,7 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 #endif
 	return error;
 }
-
+#endif
 /*
  * Encrypt the Master-Key and calculate HMAC to be able to verify it in the
  * future.
