@@ -580,8 +580,10 @@ g_luks_ctl_configure(struct gctl_req *req, struct g_class *mp)
 
 		sector = malloc(pp->sectorsize, M_LUKS, M_WAITOK | M_ZERO);
 		luks_metadata_encode(&md, sector);
-		error = g_write_data(cp, pp->mediasize - pp->sectorsize, sector,
-		    pp->sectorsize);
+//		error = g_write_data(cp, pp->mediasize - pp->sectorsize, sector,
+//		    pp->sectorsize);
+		// LUKS metadata is at the beginning of the disk
+		error = g_write_data(cp, 0, sector, pp->sectorsize);
 		if (error != 0) {
 			gctl_error(req,
 			    "Cannot store metadata on %s (error=%d).",
@@ -694,8 +696,10 @@ g_luks_ctl_setkey(struct gctl_req *req, struct g_class *mp)
 	/* Store metadata with fresh key. */
 	luks_metadata_encode(&md, sector);
 	bzero(&md, sizeof(md));
-	error = g_write_data(cp, pp->mediasize - pp->sectorsize, sector,
-	    pp->sectorsize);
+//	error = g_write_data(cp, pp->mediasize - pp->sectorsize, sector,
+//	    pp->sectorsize);
+	// LUKS metadata is at the beginning of the disk
+	error = g_write_data(cp, 0, sector, pp->sectorsize);
 	bzero(sector, pp->sectorsize);
 	free(sector, M_LUKS);
 	if (error != 0) {
@@ -801,8 +805,10 @@ g_luks_ctl_delkey(struct gctl_req *req, struct g_class *mp)
 			arc4rand(mkeydst, keysize, 0);
 		/* Store metadata with destroyed key. */
 		luks_metadata_encode(&md, sector);
-		error = g_write_data(cp, pp->mediasize - pp->sectorsize, sector,
-		    pp->sectorsize);
+//		error = g_write_data(cp, pp->mediasize - pp->sectorsize, sector,
+//		    pp->sectorsize);
+		// LUKS metadata is at the beginning of the disk
+		error = g_write_data(cp, 0, sector, pp->sectorsize);
 		if (error != 0) {
 			G_LUKS_DEBUG(0, "Cannot store metadata on %s "
 			    "(error=%d).", pp->name, error);
@@ -1050,8 +1056,10 @@ g_luks_kill_one(struct g_luks_softc *sc)
 				bzero(sector, pp->sectorsize);
 			else
 				arc4rand(sector, pp->sectorsize, 0);
-			err = g_write_data(cp, pp->mediasize - pp->sectorsize,
-			    sector, pp->sectorsize);
+//			err = g_write_data(cp, pp->mediasize - pp->sectorsize,
+//			    sector, pp->sectorsize);
+			// LUKS metadata is at the beginning of the disk
+			err = g_write_data(cp, 0, sector, pp->sectorsize);
 			if (err != 0) {
 				G_LUKS_DEBUG(0, "Cannot erase metadata on %s "
 				    "(error=%d).", pp->name, err);
