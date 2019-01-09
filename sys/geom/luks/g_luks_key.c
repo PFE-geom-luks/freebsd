@@ -154,18 +154,21 @@ g_luks_mkey_decrypt(const struct g_luks_metadata *md, const unsigned char *key,
 int
 g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 	const struct g_luks_metadata *md, unsigned char *keymaterial, const unsigned char *passphrase,
-	unsigned char *mkey, unsigned int nkey )
+	unsigned char **mkey, unsigned int nkey )
 {
 
 	int error = 0;
-	size_t keymaterial_size = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes)*LUKS_SECTOR_SIZE;
+	int i;
+
+	size_t keymaterial_blocks = af_splitted_size(md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes);
+	size_t keymaterial_size = keymaterial_blocks*LUKS_SECTOR_SIZE;
 
 #ifdef _KERNEL
 	char *dkey = malloc(md_raw->md_keybytes, M_LUKS, M_WAITOK | M_ZERO);
-	char *digest = malloc(LUKS_DIGESTSIZE,M_LUKS,M_WAITOK);
+	char *digest = malloc(SHA512_MDLEN,M_LUKS,M_WAITOK);
 #else
-	char *dkey = malloc(md_raw->md_keybytes);
-	char *digest = malloc(LUKS_DIGESTSIZE);
+	unsigned char *dkey = malloc(md_raw->md_keybytes);
+	char *digest = malloc(SHA512_MDLEN);
 #endif
 	switch(g_luks_hashstr2aalgo(md_raw->md_hashspec)){
 	case CRYPTO_SHA1_HMAC:
@@ -188,7 +191,7 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
 			error = -1;
 		}else{
-			mkey = dkey ;
+			*mkey = dkey ;
 		}
 
 
@@ -196,24 +199,22 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 	case CRYPTO_SHA2_256_HMAC:
 		pkcs5v2_genkey_sha256(dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
 
-		error = g_luks_crypto_decrypt(md->md_ealgo, keymaterial,
-		   keymaterial_size, dkey, md_raw->md_keybytes*8);
-		G_LUKS_DEBUG(1,"error : %d",error);
-		bzero(dkey,md_raw->md_keybytes);
-		if (error != 0) {
-			return (error);
+		for (i=0;i<keymaterial_blocks;i++)
+		{
+			error = g_luks_crypto_decrypt_iv(md->md_ealgo, keymaterial+i*LUKS_SECTOR_SIZE,LUKS_SECTOR_SIZE, dkey, i, md_raw->md_keybytes*8);
+			if (error != 0) {
+				return (error);
+			}
 		}
+		bzero(dkey,md_raw->md_keybytes);
 
-		af_merge(keymaterial,dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes,
-				md_raw->md_hashspec);
+		af_merge(keymaterial,dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes,md_raw->md_hashspec);
 
-
-		pkcs5v2_genkey_sha256(digest,LUKS_DIGESTSIZE,md_raw->md_mkdigestsalt,LUKS_SALTSIZE,dkey,md_raw->md_iterations);
-
+		pkcs5v2_genkey_sha256(digest,SHA512_MDLEN,md_raw->md_mkdigestsalt,LUKS_SALTSIZE,dkey,md_raw->md_iterations);
 		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
 			error = -1;
 		}else{
-			mkey = dkey;
+			*mkey = dkey;
 		}
 	case CRYPTO_SHA2_512_HMAC:
 		pkcs5v2_genkey(dkey,sizeof(*dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);

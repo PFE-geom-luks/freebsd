@@ -290,108 +290,6 @@ luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_
 }
 
 
-
-static __inline void
-luks_hash(const char *hashspec,const uint8_t *data, size_t length ,char *digest)
-{
-	if(strcasecmp("sha256",hashspec)==0){
-		SHA256_CTX lctx;
-		SHA256_Init(&lctx);
-		SHA256_Update(&lctx,data,length);
-		SHA256_Final(digest,&lctx);
-	}else if (strcasecmp("sha512",hashspec)==0){
-		SHA512_CTX lctx;
-		SHA512_Init(&lctx);
-		SHA512_Update(&lctx,data,length);
-		SHA512_Final(digest,&lctx);
-	}else if (strcasecmp("sha1",hashspec)==0){
-		SHA1_CTX lctx;
-#ifdef _KERNEL
-		SHA1Init(&lctx);
-		SHA1Update(&lctx,data,length);
-		SHA1Final(digest,&lctx);
-#else
-		SHA1_Init(&lctx);
-		SHA1_Update(&lctx,data,length);
-		SHA1_Final(digest,&lctx);
-#endif
-	}
-}
-
-
-static __inline size_t
-af_splitted_size(size_t blocksize, unsigned int blocknumber)
-{
-	size_t af_size;
-	
-	af_size = blocksize * blocknumber;
-	af_size = (af_size + (LUKS_SECTOR_SIZE-1)) / LUKS_SECTOR_SIZE;
-
-	return af_size;
-}
-
-
-static __inline void
-xor_af(const char *block1, const char *block2, char *dst, size_t length)
-{
-	size_t j;
-	for (j=0;j<length;j++){
-		dst[j] = block1[j] ^ block2[j];
-	}
-}
-
-static __inline void
-af_split(const char *material, char *dst, size_t length, unsigned int stripes, const char *hashspec)
-{
-	unsigned int i;
-#ifdef _KERNEL
-	char *lastblock = malloc(length, M_LUKS, M_WAITOK | M_ZERO);
-#else
-	char *lastblock = calloc(length,1);
-#endif
-	bzero(dst,length);
-	for (i=0;i<stripes-1;i++){
-#ifdef _KERNEL
-		arc4rand(dst+(i*length),length,0);
-#else
-		arc4random_buf(dst+(i*length),length);
-#endif
-		xor_af(dst+(i*length),lastblock,lastblock,length);
-		luks_hash(hashspec,lastblock,length,lastblock);	
-	}
-	xor_af(material,lastblock,dst+(stripes*length),length);
-#ifdef _KERNEL
-	free(lastblock,M_LUKS);
-#else
-	free(lastblock);
-#endif
-}
-
-
-static __inline void
-af_merge(const char *material, char *dst, size_t length, unsigned int stripes, const char *hashspec)
-{	
-	unsigned int i;
-#ifdef _KERNEL
-	char *lastblock = malloc(length, M_LUKS, M_WAITOK | M_ZERO);
-#else
-	char *lastblock = calloc(length,1);
-#endif
-
-	for (i=0;i<stripes-1;i++){
-		xor_af(material+(i*length),lastblock,lastblock,length);
-		luks_hash(hashspec,lastblock,length,lastblock);	
-	}
-	xor_af(material+(stripes*length),lastblock,dst,length);
-#ifdef _KERNEL
-	free(lastblock,M_LUKS);
-#else
-	free(lastblock);
-#endif
-}
-
-
-
 static __inline u_int
 g_luks_hashstr2aalgo(const char *hashspec)
 {
@@ -423,9 +321,150 @@ g_luks_hashlen_hmac(int aalgo)
 
 }
 
+static __inline void
+luks_hash(const uint8_t *data, char *digest, uint32_t iv, size_t length, const char *hashspec)
+{
+
+	char *iv_char = (char *)&iv;
+	iv = htobe32(iv);
+
+	if(strcasecmp("sha256",hashspec)==0){
+		SHA256_CTX lctx;
+		SHA256_Init(&lctx);
+		SHA256_Update(&lctx,iv_char,sizeof(uint32_t));
+		SHA256_Update(&lctx,data,length);
+		SHA256_Final(digest,&lctx);
+	}else if (strcasecmp("sha512",hashspec)==0){
+		SHA512_CTX lctx;
+		SHA512_Init(&lctx);
+		SHA512_Update(&lctx,iv_char,sizeof(uint32_t));
+		SHA512_Update(&lctx,data,length);
+		SHA512_Final(digest,&lctx);
+	}else if (strcasecmp("sha1",hashspec)==0){
+		SHA1_CTX lctx;
+#ifdef _KERNEL
+		SHA1Init(&lctx);
+		SHA1Update(&lctx,iv_char,sizeof(uint32_t));
+		SHA1Update(&lctx,data,length);
+		SHA1Final(digest,&lctx);
+#else
+		SHA1_Init(&lctx);
+		SHA1_Update(&lctx,iv_char,sizeof(uint32_t));
+		SHA1_Update(&lctx,data,length);
+		SHA1_Final(digest,&lctx);
+#endif
+	}
+}
+
+
+static __inline size_t
+af_splitted_size(size_t blocksize, unsigned int blocknumber)
+{
+	size_t af_size;
+	
+	af_size = blocksize * blocknumber;
+	af_size = (af_size + (LUKS_SECTOR_SIZE-1)) / LUKS_SECTOR_SIZE;
+
+	return af_size;
+}
+
+
+static __inline void
+xor_af(const char *block1, const char *block2, char *dst, size_t length)
+{
+	size_t j;
+	for (j=0;j<length;j++){
+		dst[j] = block1[j] ^ block2[j];
+	}
+}
+
+
+static __inline void
+af_split(const char *material, char *dst, size_t length, unsigned int stripes, const char *hashspec)
+{
+	unsigned int i, j, blocks, padding;
+	int hash_size = g_luks_hashlen_hmac(g_luks_hashstr2aalgo(hashspec));
+	blocks = length / hash_size;
+	padding = length % hash_size;
+#ifdef _KERNEL
+	char *lastblock = malloc(length, M_LUKS, M_WAITOK | M_ZERO);
+	bzero(lastblock,length);
+#else
+	char *lastblock = calloc(length,1);
+#endif
+	bzero(dst,length);
+	for (i=0;i<stripes-1;i++){
+#ifdef _KERNEL
+		arc4rand(dst+(i*length),length,0);
+#else
+		arc4random_buf(dst+(i*length),length);
+#endif
+		xor_af(dst+(i*length),lastblock,lastblock,length);
+
+
+
+		for (j = 0; j < blocks; j++)
+		{
+			luks_hash(lastblock + hash_size * j,
+				    lastblock + hash_size * j,
+				    j, (size_t)hash_size, hashspec);
+		}
+		if(padding)
+			luks_hash(lastblock + hash_size * j,
+				    lastblock + hash_size * j,
+				    j, (size_t)padding, hashspec);
+	}
+	xor_af(material,lastblock,dst+(stripes*length),length);
+#ifdef _KERNEL
+	free(lastblock,M_LUKS);
+#else
+	free(lastblock);
+#endif
+}
+
+
+static __inline void
+af_merge(const char *material, char *dst, size_t length, unsigned int stripes, const char *hashspec)
+{	
+	unsigned int i, j, blocks, padding;
+	int hash_size = g_luks_hashlen_hmac(g_luks_hashstr2aalgo(hashspec));
+	blocks = length / hash_size;
+	padding = length % hash_size;
+#ifdef _KERNEL
+	char *lastblock = malloc(length, M_LUKS, M_WAITOK | M_ZERO);
+	bzero(lastblock,length);
+	G_LUKS_DEBUG(1,"blocks : %u , length : %zu , hash size : %d",blocks,length,hash_size);
+#else
+	char *lastblock = calloc(length,1);
+#endif
+
+	for (i=0;i<stripes-1;i++){
+		xor_af(material+(i*length),lastblock,lastblock,length);
+		for (j = 0; j < blocks; j++)
+		{
+			luks_hash(lastblock + hash_size * j,
+				    lastblock + hash_size * j,
+				    j, (size_t)hash_size, hashspec);
+		}
+		if(padding)
+			luks_hash(lastblock + hash_size * j,
+				    lastblock + hash_size * j,
+				    j, (size_t)padding, hashspec);
+	}
+	xor_af(material+(i*length),lastblock,dst,length);
+#ifdef _KERNEL
+	free(lastblock,M_LUKS);
+#else
+	free(lastblock);
+#endif
+}
+
+
+
+
 
 int g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw, const struct g_luks_metadata *md, unsigned char *keymaterial, const unsigned char *passphrase,
-		unsigned char *mkey, unsigned int nkey );
+		unsigned char **mkey, unsigned int nkey );
 
 void g_luks_crypto_hmac_init_sha1(struct hmac_sha1_ctx *ctx, const uint8_t *hkey,
     size_t hkeylen);
