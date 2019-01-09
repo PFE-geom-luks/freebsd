@@ -696,11 +696,10 @@ int g_luks_mkey_decrypt(const struct g_luks_metadata *md,
     const unsigned char *key, unsigned char *mkey, unsigned *nkeyp);
 int g_luks_mkey_encrypt(unsigned algo, const unsigned char *key, unsigned keylen,
     unsigned char *mkey);
-void g_luks_crypto_ivgen_ealgo(uint16_t algo, off_t offset, u_char *iv,size_t size);
-int g_luks_crypto_decrypt_iv(u_int algo, u_char *data, size_t datasize,
-    const u_char *key, uint64_t sector, size_t keysize);
 #ifdef _KERNEL
 void g_luks_mkey_propagate(struct g_luks_softc *sc, const unsigned char *mkey);
+int g_luks_crypto_decrypt_iv(u_int algo, u_char *data, size_t datasize,
+    const u_char *key, uint64_t sector, size_t keysize);
 #endif
 
 int g_luks_crypto_encrypt(u_int algo, u_char *data, size_t datasize,
