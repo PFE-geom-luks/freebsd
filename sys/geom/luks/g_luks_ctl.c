@@ -142,9 +142,10 @@ g_luks_ctl_attach(struct gctl_req *req, struct g_class *mp)
 		md.md_flags |= G_LUKS_FLAG_WO_DETACH;
 	if (*readonly)
 		md.md_flags |= G_LUKS_FLAG_RO;
-	g_luks_create(req, mp, pp, &md, mkey, nkey);
+	g_luks_create(req, mp, pp, &md, &md_raw, mkey, nkey);
 	bzero(mkey, sizeof(mkey));
 	bzero(&md, sizeof(md));
+	bzero(&md_raw, sizeof(md_raw));
 }
 
 static struct g_luks_softc *
@@ -235,6 +236,7 @@ static void
 g_luks_ctl_onetime(struct gctl_req *req, struct g_class *mp)
 {
 	struct g_luks_metadata md;
+	struct g_luks_metadata_raw md_raw;
 	struct g_provider *pp;
 	const char *name;
 	intmax_t *keylen, *sectorsize;
@@ -364,9 +366,10 @@ g_luks_ctl_onetime(struct gctl_req *req, struct g_class *mp)
 		md.md_sectorsize = *sectorsize;
 	}
 
-	g_luks_create(req, mp, pp, &md, mkey, -1);
+	g_luks_create(req, mp, pp, &md, &md_raw, mkey, -1);
 	bzero(mkey, sizeof(mkey));
 	bzero(&md, sizeof(md));
+	bzero(&md_raw, sizeof(md_raw));
 }
 
 static void
@@ -1239,10 +1242,11 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 		md.md_flags |= G_LUKS_FLAG_WO_DETACH;
 	if (*readonly)
 		md.md_flags |= G_LUKS_FLAG_RO;
-	//g_luks_create(req, mp, pp, &md, mkey, nkey);
-	*/
-	bzero(mkey, md_raw.md_keybytes);
-	free(mkey,M_LUKS);
+	
+	g_luks_create(req, mp, pp, &md, &md_raw, mkey, nkey);
+	
+//	bzero(mkey, md_raw.md_keybytes);
+//	free(mkey,M_LUKS);
 	bzero(&md_raw, sizeof(md_raw));
 	bzero(&md, sizeof(md));
 

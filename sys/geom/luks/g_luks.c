@@ -782,7 +782,7 @@ g_luks_cpu_is_disabled(int cpu)
 
 struct g_geom *
 g_luks_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
-    const struct g_luks_metadata *md, const u_char *mkey, int nkey)
+    const struct g_luks_metadata *md, const struct g_luks_metadata_raw *md_raw, const u_char *mkey, int nkey)
 {
 	struct g_luks_softc *sc;
 	struct g_luks_worker *wr;
@@ -1245,7 +1245,7 @@ have_key:
 	/*
 	 * We have correct key, let's attach provider.
 	 */
-	gp = g_luks_create(NULL, mp, pp, &md, mkey, nkey);
+	gp = g_luks_create(NULL, mp, pp, &md, &md_raw, mkey, nkey);
 	bzero(mkey, sizeof(mkey));
 	bzero(&md, sizeof(md));
 	if (gp == NULL) {
