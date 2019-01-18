@@ -154,7 +154,7 @@ g_luks_mkey_decrypt(const struct g_luks_metadata *md, const unsigned char *key,
 int
 g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 	const struct g_luks_metadata *md, unsigned char *keymaterial, const unsigned char *passphrase,
-	unsigned char **mkey, unsigned int nkey )
+	unsigned char *mkey, unsigned int nkey )
 {
 
 	int error = 0;
@@ -191,8 +191,9 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
 			error = -1;
 		}else{
-			*mkey = dkey ;
+			bcopy(dkey,mkey,md_raw->md_keybytes);
 		}
+
 
 
 	case CRYPTO_RIPEMD160_HMAC:
@@ -214,7 +215,7 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
 			error = -1;
 		}else{
-			*mkey = dkey;
+			bcopy(dkey,mkey,md_raw->md_keybytes);
 		}
 	case CRYPTO_SHA2_512_HMAC:
 		pkcs5v2_genkey(dkey,sizeof(*dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);

@@ -1148,8 +1148,8 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	struct g_luks_metadata md;
 	struct g_provider *pp;
 	const char *name;
-	u_char *passphrase, *mkey=NULL;
-	int *nargs;
+	u_char *passphrase, mkey[G_LUKS_MAXKEYLEN];
+	int *nargs, *detach, *readonly;
 	int passsize, error, i;
 	u_int nkey = 0;
 
@@ -1228,7 +1228,8 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 		return;
 	}
 
-	error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, &mkey, 0);
+	error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, mkey, 0);
+
 	bzero(passphrase, sizeof(*passphrase));
 	bzero(keymaterial, sizeof(*keymaterial));
 	free(keymaterial,M_LUKS);
