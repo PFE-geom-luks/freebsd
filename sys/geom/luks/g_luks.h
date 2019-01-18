@@ -235,6 +235,7 @@ struct g_luks_softc {
 	uint32_t	 sc_flags;
 	int		 sc_inflight;
 	off_t		 sc_mediasize;
+	off_t		 sc_offset;
 	size_t		 sc_sectorsize;
 	u_int		 sc_bytes_per_sector;
 	u_int		 sc_data_per_sector;

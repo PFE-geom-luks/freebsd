@@ -159,6 +159,7 @@ g_luks_crypto_write_done(struct cryptop *crp)
 		return (0);
 	}
 	cbp->bio_data = bp->bio_driver2;
+	cbp->bio_offset+=sc->sc_offset;
 	cbp->bio_done = g_luks_write_done;
 	cp = LIST_FIRST(&gp->consumer);
 	cbp->bio_to = cp->provider;
@@ -204,6 +205,7 @@ g_luks_crypto_read(struct g_luks_softc *sc, struct bio *bp, boolean_t fromworker
 	bp->bio_pflags = 0;
 	bp->bio_driver2 = NULL;
 	cbp = bp->bio_driver1;
+	cbp->bio_offset+=sc->sc_offset;
 	cbp->bio_done = g_luks_read_done;
 	cp = LIST_FIRST(&sc->sc_geom->consumer);
 	cbp->bio_to = cp->provider;
@@ -293,17 +295,20 @@ g_luks_crypto_run(struct g_luks_worker *wr, struct bio *bp)
 		crd->crd_skip = 0;
 		crd->crd_len = secsize;
 		crd->crd_flags = CRD_F_IV_EXPLICIT | CRD_F_IV_PRESENT;
-		if ((sc->sc_flags & G_LUKS_FLAG_SINGLE_KEY) == 0)
-			crd->crd_flags |= CRD_F_KEY_EXPLICIT;
+		crd->crd_flags |= CRD_F_KEY_EXPLICIT;
+//		if ((sc->sc_flags & G_LUKS_FLAG_SINGLE_KEY) == 0)
+//			crd->crd_flags |= CRD_F_KEY_EXPLICIT;
 		if (bp->bio_cmd == BIO_WRITE)
 			crd->crd_flags |= CRD_F_ENCRYPT;
 		crd->crd_alg = sc->sc_ealgo;
-		crd->crd_key = g_luks_key_hold(sc, dstoff, secsize);
+		crd->crd_key = sc->sc_ekey;
 		crd->crd_klen = sc->sc_ekeylen;
-		if (sc->sc_ealgo == CRYPTO_AES_XTS)
-			crd->crd_klen <<= 1;
-		g_luks_crypto_ivgen(sc, dstoff, crd->crd_iv,
+//		if (sc->sc_ealgo == CRYPTO_AES_XTS)
+//			crd->crd_klen <<= 1;
+		g_luks_crypto_ivgen(sc, dstoff/secsize, crd->crd_iv,
 		    sizeof(crd->crd_iv));
+
+		G_LUKS_DEBUG(1,"dstoff : %ld, keylen : %d",dstoff,crd->crd_klen);
 		crd->crd_next = NULL;
 
 		crp->crp_etype = 0;

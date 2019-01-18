@@ -813,6 +813,7 @@ g_luks_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 		gp->access = g_std_access;
 
 	luks_metadata_softc(sc, md, bpp->sectorsize, bpp->mediasize);
+	sc->sc_offset=md_raw->md_payloadoffset * bpp->sectorsize;
 	sc->sc_nkey = nkey;
 
 	gp->softc = sc;
@@ -913,9 +914,8 @@ g_luks_create(struct gctl_req *req, struct g_class *mp, struct g_provider *bpp,
 	 * Create decrypted provider.
 	 */
 	pp = g_new_providerf(gp, "%s%s", bpp->name, G_LUKS_SUFFIX);
-	pp->mediasize = sc->sc_mediasize;
+	pp->mediasize = sc->sc_mediasize - (md_raw->md_payloadoffset-1) * sc->sc_sectorsize;
 	pp->sectorsize = sc->sc_sectorsize;
-
 	g_error_provider(pp, 0);
 
 	G_LUKS_DEBUG(0, "Device %s created.", pp->name);
