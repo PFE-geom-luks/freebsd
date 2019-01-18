@@ -1166,6 +1166,18 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 		return;
 	}
 
+	detach = gctl_get_paraml(req, "detach", sizeof(*detach));
+	if (detach == NULL) {
+		gctl_error(req, "No '%s' argument.", "detach");
+		return;
+	}
+
+	readonly = gctl_get_paraml(req, "readonly", sizeof(*readonly));
+	if (readonly == NULL) {
+		gctl_error(req, "No '%s' argument.", "readonly");
+		return;
+	}
+
 	name = gctl_get_asciiparam(req, "arg0");
 	if (name == NULL) {
 		gctl_error(req, "No 'arg%u' argument.", 0);
@@ -1233,7 +1245,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	}
 	G_LUKS_DEBUG(1, "Using Master Key %u for %s.", 0 , pp->name);
 
-	/*if (*detach && *readonly) {
+	if (*detach && *readonly) {
 		bzero(&md_raw, sizeof(md_raw));
 		gctl_error(req, "Options -d and -r are mutually exclusive.");
 		return;

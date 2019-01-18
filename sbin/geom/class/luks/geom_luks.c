@@ -277,9 +277,11 @@ struct g_command class_commands[] = {
 	},
 	{ "test_passphrase", G_FLAG_VERBOSE | G_FLAG_LOADKLD, luks_main,
 	    {
+		{ 'd', "detach", NULL, G_TYPE_BOOL },
+		{ 'r', "readonly", NULL, G_TYPE_BOOL },
 		G_OPT_SENTINEL
 	    },
-	    "[-v] prov"
+	    "[-drv] prov"
 	},
 	G_CMD_SENTINEL
 };
