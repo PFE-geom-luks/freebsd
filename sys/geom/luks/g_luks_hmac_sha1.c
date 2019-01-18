@@ -44,7 +44,6 @@ __FBSDID("$FreeBSD$");
 #define	_OpenSSL_
 #endif
 #include <geom/luks/g_luks.h>
-#include <geom/luks/g_luks_metadata.h>
 
 
 #ifdef _KERNEL

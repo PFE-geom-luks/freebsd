@@ -45,7 +45,6 @@ __FBSDID("$FreeBSD$");
 
 #include <geom/geom.h>
 #include <geom/luks/g_luks.h>
-#include <geom/luks/g_luks_metadata.h>
 
 
 MALLOC_DECLARE(M_LUKS);
