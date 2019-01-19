@@ -149,9 +149,9 @@
 #define	G_LUKS_CRYPTO_HW		1
 #define	G_LUKS_CRYPTO_SW		2
 
-#define	G_LUKS_CRYPTO_PLAIN64		0
-#define	G_LUKS_CRYPTO_PLAIN		1
-#define	G_LUKS_CRYPTO_ESSIV_SHA256	2
+#define	G_LUKS_CRYPTO_PLAIN64		1
+#define	G_LUKS_CRYPTO_PLAIN		2
+#define	G_LUKS_CRYPTO_ESSIV_SHA256	3
 
 #define LUKS_MAGIC_L		6
 #define LUKS_CIPHERNAME_L 	32
@@ -741,7 +741,7 @@ void g_luks_auth_run(struct g_luks_worker *wr, struct bio *bp);
 void g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
     size_t size);
 
-void g_luks_crypto_ivgen_aalgo(uint16_t algo, off_t offset, u_char *iv,size_t size);
+void g_luks_crypto_ivgen_aalgo(u_int algo, off_t offset, u_char *iv,size_t size);
 void g_luks_mkey_hmac(unsigned char *mkey, const unsigned char *key);
 int g_luks_mkey_decrypt(const struct g_luks_metadata *md,
     const unsigned char *key, unsigned char *mkey, unsigned *nkeyp);
@@ -945,7 +945,7 @@ g_luks_cipher2ealgo(const char *name, const char *mode)
 		else if (strncasecmp("cbc", mode, 3) == 0)
 			return (CRYPTO_AES_CBC);
 	}
-	else if (strcasecmp("cast5", name)) {
+	else if (strcasecmp("cast5", name) == 0) {
 		return (CRYPTO_CAST_CBC);
 	}
 	return (CRYPTO_ALGORITHM_MIN - 1);
@@ -961,7 +961,7 @@ g_luks_cipher2aalgo(const char *mode)
 	else if (strcasecmp("cbc-essiv:sha256", mode) == 0)
 		return (G_LUKS_CRYPTO_ESSIV_SHA256);
 
-	return (CRYPTO_ALGORITHM_MIN - 1);
+	return G_LUKS_CRYPTO_UNKNOWN;
 }
 
 static __inline void
