@@ -56,7 +56,7 @@ g_luks_crypto_done(struct cryptop *crp)
 }
 
 int
-g_luks_crypto_decrypt_iv(u_int algo, u_char *data, size_t datasize,
+g_luks_crypto_decrypt_iv(u_int ealgo, u_int aalgo, u_char *data, size_t datasize,
     const u_char *key, uint64_t sector, size_t keysize)
 {
 	struct cryptoini cri;
@@ -67,7 +67,7 @@ g_luks_crypto_decrypt_iv(u_int algo, u_char *data, size_t datasize,
 	int error;
 
 	bzero(&cri, sizeof(cri));
-	cri.cri_alg = algo;
+	cri.cri_alg = ealgo;
 	cri.cri_key = __DECONST(void *, key);
 	cri.cri_klen = keysize;
 	error = crypto_newsession(&sid, &cri, CRYPTOCAP_F_SOFTWARE);
@@ -84,10 +84,10 @@ g_luks_crypto_decrypt_iv(u_int algo, u_char *data, size_t datasize,
 	crd->crd_skip = 0;
 	crd->crd_len = datasize;
 	crd->crd_flags = CRD_F_IV_EXPLICIT | CRD_F_IV_PRESENT;
-	crd->crd_alg = algo;
+	crd->crd_alg = ealgo;
 	crd->crd_key = __DECONST(void *, key);
 	crd->crd_klen = keysize;
-	g_luks_crypto_ivgen_ealgo(algo,sector,crd->crd_iv,sizeof(crd->crd_iv));
+	g_luks_crypto_ivgen_aalgo(aalgo,sector,crd->crd_iv,sizeof(crd->crd_iv));
 	crd->crd_next = NULL;
 
 	crp->crp_sid = sid;

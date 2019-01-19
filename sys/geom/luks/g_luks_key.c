@@ -202,7 +202,7 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 
 		for (i=0;i<keymaterial_blocks;i++)
 		{
-			error = g_luks_crypto_decrypt_iv(md->md_ealgo, keymaterial+i*LUKS_SECTOR_SIZE,LUKS_SECTOR_SIZE, dkey, i, md_raw->md_keybytes*8);
+			error = g_luks_crypto_decrypt_iv(md->md_ealgo, md->md_aalgo, keymaterial+i*LUKS_SECTOR_SIZE,LUKS_SECTOR_SIZE, dkey, i, md_raw->md_keybytes*8);
 			if (error != 0) {
 				return (error);
 			}

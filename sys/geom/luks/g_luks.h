@@ -149,6 +149,10 @@
 #define	G_LUKS_CRYPTO_HW		1
 #define	G_LUKS_CRYPTO_SW		2
 
+#define	G_LUKS_CRYPTO_PLAIN64		0
+#define	G_LUKS_CRYPTO_PLAIN		1
+#define	G_LUKS_CRYPTO_ESSIV_SHA256	2
+
 #define LUKS_MAGIC_L		6
 #define LUKS_CIPHERNAME_L 	32
 #define LUKS_CIPHERMODE_L 	32
@@ -737,7 +741,7 @@ void g_luks_auth_run(struct g_luks_worker *wr, struct bio *bp);
 void g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
     size_t size);
 
-void g_luks_crypto_ivgen_ealgo(uint16_t algo, off_t offset, u_char *iv,size_t size);
+void g_luks_crypto_ivgen_aalgo(uint16_t algo, off_t offset, u_char *iv,size_t size);
 void g_luks_mkey_hmac(unsigned char *mkey, const unsigned char *key);
 int g_luks_mkey_decrypt(const struct g_luks_metadata *md,
     const unsigned char *key, unsigned char *mkey, unsigned *nkeyp);
@@ -745,7 +749,7 @@ int g_luks_mkey_encrypt(unsigned algo, const unsigned char *key, unsigned keylen
     unsigned char *mkey);
 #ifdef _KERNEL
 void g_luks_mkey_propagate(struct g_luks_softc *sc, const unsigned char *mkey);
-int g_luks_crypto_decrypt_iv(u_int algo, u_char *data, size_t datasize,
+int g_luks_crypto_decrypt_iv(u_int ealgo, u_int aalgo, u_char *data, size_t datasize,
     const u_char *key, uint64_t sector, size_t keysize);
 #endif
 
@@ -936,17 +940,27 @@ static __inline u_int
 g_luks_cipher2ealgo(const char *name, const char *mode)
 {
 	if (strcasecmp("aes", name) == 0) {
-		if (strcasecmp("xts-plain64", mode) == 0)
+		if (strncasecmp("xts", mode, 3) == 0)
 			return (CRYPTO_AES_XTS);
-		else if (strcasecmp("cbc-essiv:sha256", mode) == 0)
+		else if (strncasecmp("cbc", mode, 3) == 0)
 			return (CRYPTO_AES_CBC);
-		else if (strcasecmp("cbc-plain", mode) == 0)
-			// TODO: handle the case with PLAIN as cipher mode
-			return (CRYPTO_ALGORITHM_MIN - 1);
 	}
-	else if (strcasecmp("cast5", name) == 0 && strcasecmp("cbc-plain", mode) == 0) {
+	else if (strcasecmp("cast5", name)) {
 		return (CRYPTO_CAST_CBC);
 	}
+	return (CRYPTO_ALGORITHM_MIN - 1);
+}
+
+static __inline u_int
+g_luks_cipher2aalgo(const char *mode)
+{
+	if (strcasecmp("xts-plain64", mode) == 0)
+		return (G_LUKS_CRYPTO_PLAIN64);
+	else if (strcasecmp("cbc-plain", mode) == 0)
+		return (G_LUKS_CRYPTO_PLAIN);
+	else if (strcasecmp("cbc-essiv:sha256", mode) == 0)
+		return (G_LUKS_CRYPTO_ESSIV_SHA256);
+
 	return (CRYPTO_ALGORITHM_MIN - 1);
 }
 
@@ -958,6 +972,7 @@ luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_
 	bcopy(md_raw->md_magic,md->md_magic,sizeof(md->md_magic));
 	md->md_version = G_LUKS_VERSION_04;
 	md->md_ealgo = g_luks_cipher2ealgo(md_raw->md_ciphername, md_raw->md_ciphermode);
+	md->md_aalgo = g_luks_cipher2aalgo(md_raw->md_ciphermode);
 	md->md_keylen = 8 * md_raw->md_keybytes;
 	md->md_sectorsize = LUKS_SECTOR_SIZE;
 	md->md_iterations = md_raw->md_iterations;

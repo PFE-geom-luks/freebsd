@@ -129,13 +129,18 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
 {
 	uint8_t off[8];
 
-	switch (sc->sc_ealgo) {
-	case CRYPTO_AES_XTS:
+	switch (sc->sc_aalgo) {
+	case G_LUKS_CRYPTO_PLAIN64:
 		le64enc(off, (uint64_t)offset);
 		bcopy(off, iv, sizeof(off));
 		bzero(iv + sizeof(off), size - sizeof(off));
 		break;
-	case CRYPTO_AES_CBC:
+	case G_LUKS_CRYPTO_PLAIN:
+		le32enc(off, (uint64_t)(offset & 0xffffffff));
+		bcopy(off, iv, sizeof(off));
+		bzero(iv + sizeof(off), size - sizeof(off));
+		break;
+	case G_LUKS_CRYPTO_ESSIV_SHA256:
 		{
 			u_char hash[SHA256_DIGEST_LENGTH];
 			SHA256_CTX ctx;
@@ -149,11 +154,6 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
 			bcopy(hash, iv, MIN(sizeof(hash), size));
 			break;
 		}
-	case CRYPTO_CAST_CBC:
-		le32enc(off, (uint64_t)(offset & 0xffffffff));
-		bcopy(off, iv, sizeof(off));
-		bzero(iv + sizeof(off), size - sizeof(off));
-		break;
 	default:
 		// TODO: handle the case with aes-cbc-plain
 		// assert(0); // ???
@@ -164,20 +164,24 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
 
 
 void
-g_luks_crypto_ivgen_ealgo(uint16_t algo, off_t offset, u_char *iv,
+g_luks_crypto_ivgen_aalgo(uint16_t algo, off_t offset, u_char *iv,
     size_t size)
 {
 	uint8_t off[8];
 
 	switch (algo) {
-	case CRYPTO_AES_XTS:
+	case G_LUKS_CRYPTO_PLAIN64:
 		le64enc(off, (uint64_t)offset);
 		bcopy(off, iv, sizeof(off));
 		bzero(iv + sizeof(off), size - sizeof(off));
 		break;
+	case G_LUKS_CRYPTO_PLAIN:
+		le32enc(off, (uint64_t)(offset & 0xffffffff));
+		bcopy(off, iv, sizeof(off));
+		bzero(iv + sizeof(off), size - sizeof(off));
+		break;
 	default:
-		// TODO: handle the case with aes-cbc-plain
-		// assert(0); // ???
+		// TODO: handle the case with aes-cbc-essiv:sha256
 		break;
 	}
 }
