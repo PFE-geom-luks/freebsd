@@ -684,10 +684,10 @@ luks_metadata_softc(struct g_luks_softc *sc, const struct g_luks_metadata *md,
 	if (md->md_version < G_LUKS_VERSION_07)
 		sc->sc_flags |= G_LUKS_FLAG_ENC_IVKEY;
 	sc->sc_ealgo = md->md_ealgo;
+	sc->sc_aalgo = md->md_aalgo;
 
 	if (sc->sc_flags & G_LUKS_FLAG_AUTH) {
 		sc->sc_akeylen = sizeof(sc->sc_akey) * 8;
-		sc->sc_aalgo = md->md_aalgo;
 		sc->sc_alen = g_luks_hashlen(sc->sc_aalgo);
 
 		sc->sc_data_per_sector = sectorsize - sc->sc_alen;
