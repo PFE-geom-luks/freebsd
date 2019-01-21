@@ -185,7 +185,7 @@ g_luks_key_init(struct g_luks_softc *sc)
 
 	mtx_lock(&sc->sc_ekeys_lock);
 
-	mkey = sc->sc_mkey + sizeof(sc->sc_ivkey);
+	mkey = sc->sc_mkey;
 	if ((sc->sc_flags & G_LUKS_FLAG_AUTH) == 0)
 		bcopy(mkey, sc->sc_ekey, G_LUKS_DATAKEYLEN);
 	else {
