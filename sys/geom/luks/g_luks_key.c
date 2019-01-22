@@ -203,10 +203,10 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 		for (i=0;i<keymaterial_blocks;i++)
 		{
 			SHA256_CTX *ivctx;
-			uint8_t    ivkey[G_LUKS_IVKEYLEN];
+			uint8_t ivkey[G_LUKS_IVKEYLEN];
 
 			bcopy(mkey, ivkey, sizeof(ivkey));
-			ivctx = malloc(sizeof(*ivkey), M_LUKS, M_WAITOK | M_ZERO);
+			ivctx = malloc(sizeof(*ivctx), M_LUKS, M_WAITOK | M_ZERO);
 
 			/*
 			 * Precalculate SHA256 for IV generation.
