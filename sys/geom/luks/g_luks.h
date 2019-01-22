@@ -998,15 +998,15 @@ luks_metadata_raw_to_md(const struct g_luks_metadata_raw *md_raw, struct g_luks_
 static __inline u_int
 g_luks_hashstr2aalgo(const char *hashspec)
 {
-        if (strcasecmp("sha1", hashspec) == 0)
-                return (CRYPTO_SHA1_HMAC);
-        else if (strcasecmp("ripemd160", hashspec) == 0)
-                return (CRYPTO_RIPEMD160_HMAC);
-        else if (strcasecmp("sha256", hashspec) == 0)
-                return (CRYPTO_SHA2_256_HMAC);
-        else if (strcasecmp("sha512", hashspec) == 0)
-                return (CRYPTO_SHA2_512_HMAC);
-        return (CRYPTO_ALGORITHM_MIN - 1);
+	if (strcasecmp("sha1", hashspec) == 0)
+		return (CRYPTO_SHA1_HMAC);
+	else if (strcasecmp("ripemd160", hashspec) == 0)
+		return (CRYPTO_RIPEMD160_HMAC);
+	else if (strcasecmp("sha256", hashspec) == 0)
+		return (CRYPTO_SHA2_256_HMAC);
+	else if (strcasecmp("sha512", hashspec) == 0)
+		return (CRYPTO_SHA2_512_HMAC);
+	return (CRYPTO_ALGORITHM_MIN - 1);
 }
 
 static __inline u_int

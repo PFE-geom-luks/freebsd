@@ -1218,21 +1218,31 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	}
 
 	size_t splitted_key_length;
-	splitted_key_length = af_splitted_size(md_raw.md_keybytes,md_raw.md_keyslot[0].stripes) * pp->sectorsize;
+	for (i = 0; i < LUKS_NUMKEYS; ++i) {
+		if(md_raw.md_keyslot[i].active != LUKS_KEY_ENABLED)
+			continue;
+		
+		splitted_key_length = af_splitted_size(md_raw.md_keybytes,md_raw.md_keyslot[i].stripes) * pp->sectorsize;
 
-	char *keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
-	error = g_luks_read_keymaterial(mp,pp,md_raw.md_keyslot[0].keymaterialoffset,splitted_key_length,keymaterial);
-	if (error != 0) {
-		gctl_error(req, "Cannot read material from %s (error=%d).",
-		    name, error);
-		return;
+		char *keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
+		error = g_luks_read_keymaterial(mp,pp,md_raw.md_keyslot[i].keymaterialoffset,splitted_key_length,keymaterial);
+		if (error != 0) {
+			gctl_error(req, "Cannot read material from %s (error=%d).",
+			    name, error);
+			return;
+		}
+
+		error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, mkey, 0);
+
+		bzero(keymaterial, sizeof(*keymaterial));
+		free(keymaterial, M_LUKS);
+
+		if (error == 0)
+			break;
 	}
 
-	error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, mkey, 0);
-
 	bzero(passphrase, sizeof(*passphrase));
-	bzero(keymaterial, sizeof(*keymaterial));
-	free(keymaterial,M_LUKS);
+
 	if (error == -1) {
 		bzero(&md_raw, sizeof(md_raw));
 		gctl_error(req, "Wrong passphrase for %s.", pp->name);
