@@ -56,8 +56,8 @@ g_luks_crypto_done(struct cryptop *crp)
 }
 
 int
-g_luks_crypto_decrypt_iv(u_int ealgo, u_int aalgo, u_char *data, size_t datasize,
-    const u_char *key, uint64_t sector, size_t keysize)
+g_luks_crypto_decrypt_iv(u_int ealgo, u_int aalgo, SHA256_CTX *ivctx, u_char *data,
+	size_t datasize, const u_char *key, uint64_t sector, size_t keysize)
 {
 	struct cryptoini cri;
 	struct cryptop *crp;
@@ -87,7 +87,7 @@ g_luks_crypto_decrypt_iv(u_int ealgo, u_int aalgo, u_char *data, size_t datasize
 	crd->crd_alg = ealgo;
 	crd->crd_key = __DECONST(void *, key);
 	crd->crd_klen = keysize;
-	g_luks_crypto_ivgen_aalgo(aalgo,sector,crd->crd_iv,sizeof(crd->crd_iv));
+	g_luks_crypto_ivgen_aalgo(aalgo,ivctx,sector,crd->crd_iv,sizeof(crd->crd_iv));
 	crd->crd_next = NULL;
 
 	crp->crp_sid = sid;

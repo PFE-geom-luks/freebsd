@@ -741,7 +741,7 @@ void g_luks_auth_run(struct g_luks_worker *wr, struct bio *bp);
 void g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
     size_t size);
 
-void g_luks_crypto_ivgen_aalgo(u_int algo, off_t offset, u_char *iv,size_t size);
+void g_luks_crypto_ivgen_aalgo(u_int algo, SHA256_CTX *ivctx, off_t offset, u_char *iv,size_t size);
 void g_luks_mkey_hmac(unsigned char *mkey, const unsigned char *key);
 int g_luks_mkey_decrypt(const struct g_luks_metadata *md,
     const unsigned char *key, unsigned char *mkey, unsigned *nkeyp);
@@ -749,8 +749,8 @@ int g_luks_mkey_encrypt(unsigned algo, const unsigned char *key, unsigned keylen
     unsigned char *mkey);
 #ifdef _KERNEL
 void g_luks_mkey_propagate(struct g_luks_softc *sc, const unsigned char *mkey);
-int g_luks_crypto_decrypt_iv(u_int ealgo, u_int aalgo, u_char *data, size_t datasize,
-    const u_char *key, uint64_t sector, size_t keysize);
+int g_luks_crypto_decrypt_iv(u_int ealgo, u_int aalgo, SHA256_CTX *ivctx, u_char *data,
+    size_t datasize, const u_char *key, uint64_t sector, size_t keysize);
 #endif
 
 int g_luks_crypto_encrypt(u_int algo, u_char *data, size_t datasize,

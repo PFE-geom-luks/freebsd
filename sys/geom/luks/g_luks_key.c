@@ -202,7 +202,27 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 
 		for (i=0;i<keymaterial_blocks;i++)
 		{
-			error = g_luks_crypto_decrypt_iv(md->md_ealgo, md->md_aalgo, keymaterial+i*LUKS_SECTOR_SIZE,LUKS_SECTOR_SIZE, dkey, i, md_raw->md_keybytes*8);
+			SHA256_CTX *ivctx;
+			uint8_t    ivkey[G_LUKS_IVKEYLEN];
+
+			bcopy(mkey, ivkey, sizeof(ivkey));
+			ivctx = malloc(sizeof(*ivkey), M_LUKS, M_WAITOK | M_ZERO);
+
+			/*
+			 * Precalculate SHA256 for IV generation.
+			 * This is expensive operation and we can do it only once now or for
+			 * every access to sector, so now will be much better.
+			 */
+			if (md->md_aalgo == G_LUKS_CRYPTO_ESSIV_SHA256) {
+				SHA256_Init(ivctx);
+				SHA256_Update(ivctx, ivkey, sizeof(ivkey));
+			}
+
+			error = g_luks_crypto_decrypt_iv(md->md_ealgo, md->md_aalgo, ivctx, keymaterial+i*LUKS_SECTOR_SIZE,LUKS_SECTOR_SIZE, dkey, i, md_raw->md_keybytes*8);
+
+			bzero(ivctx, sizeof(*ivctx));
+			free(ivctx, M_LUKS);
+
 			if (error != 0) {
 				return (error);
 			}

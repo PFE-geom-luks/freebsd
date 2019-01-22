@@ -124,13 +124,13 @@ g_luks_crypto_hmac(const uint8_t *hkey, size_t hkeysize, const uint8_t *data,
  * Here we generate IV. It is unique for every sector.
  */
 void
-g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
-    size_t size)
+g_luks_crypto_ivgen_aalgo(u_int mode, SHA256_CTX *ivctx, off_t offset,
+	u_char *iv, size_t size)
 {
 	uint8_t off[8];
 	bzero(off,sizeof(off));
 
-	switch (sc->sc_aalgo) {
+	switch (mode) {
 	case G_LUKS_CRYPTO_PLAIN64:
 		le64enc(off, (uint64_t)offset);
 		bcopy(off, iv, sizeof(off));
@@ -149,7 +149,7 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
 			le64enc(off, (uint64_t)offset);
 
 			/* Copy precalculated SHA256 context for IV-Key. */
-			bcopy(&sc->sc_ivctx, &ctx, sizeof(ctx));
+			bcopy(&ivctx, &ctx, sizeof(ctx));
 			SHA256_Update(&ctx, off, sizeof(off));
 			SHA256_Final(hash, &ctx);
 			bcopy(hash, iv, MIN(sizeof(hash), size));
@@ -162,28 +162,9 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
 	}
 }
 
-
-
 void
-g_luks_crypto_ivgen_aalgo(u_int algo, off_t offset, u_char *iv,
+g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
     size_t size)
 {
-	uint8_t off[8];
-	bzero(off,sizeof(off));
-
-	switch (algo) {
-	case G_LUKS_CRYPTO_PLAIN64:
-		le64enc(off, (uint64_t)offset);
-		bcopy(off, iv, sizeof(off));
-		bzero(iv + sizeof(off), size - sizeof(off));
-		break;
-	case G_LUKS_CRYPTO_PLAIN:
-		le32enc(off, (uint64_t)(offset & 0xffffffff));
-		bcopy(off, iv, sizeof(off));
-		bzero(iv + sizeof(off), size - sizeof(off));
-		break;
-	default:
-		// TODO: handle the case with aes-cbc-essiv:sha256
-		break;
-	}
+	g_luks_crypto_ivgen_aalgo(sc->sc_aalgo, &sc->sc_ivctx, offset, iv, size);
 }
