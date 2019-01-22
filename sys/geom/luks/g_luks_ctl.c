@@ -1151,6 +1151,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 	u_char *passphrase, mkey[G_LUKS_MAXKEYLEN];
 	int *nargs, *detach, *readonly;
 	int passsize, error, i;
+	size_t splitted_key_length;
 	u_int nkey = 0;
 
 	g_topology_assert();
@@ -1217,43 +1218,39 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 		return;
 	}
 
-	size_t splitted_key_length;
-	for (i = 0; i < LUKS_NUMKEYS; ++i) {
-		if(md_raw.md_keyslot[i].active != LUKS_KEY_ENABLED)
-			continue;
-		
-		splitted_key_length = af_splitted_size(md_raw.md_keybytes,md_raw.md_keyslot[i].stripes) * pp->sectorsize;
+	while (nkey<LUKS_NUMKEYS && error != 0){
 
-		char *keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
-		error = g_luks_read_keymaterial(mp,pp,md_raw.md_keyslot[i].keymaterialoffset,splitted_key_length,keymaterial);
-		if (error != 0) {
-			gctl_error(req, "Cannot read material from %s (error=%d).",
-			    name, error);
-			return;
+		if(md_raw.md_keyslot[nkey].active == LUKS_KEY_ENABLED){
+
+			splitted_key_length = af_splitted_size(md_raw.md_keybytes,md_raw.md_keyslot[nkey].stripes) * pp->sectorsize;
+
+			char *keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
+			error = g_luks_read_keymaterial(mp,pp,md_raw.md_keyslot[nkey].keymaterialoffset,splitted_key_length,keymaterial);
+			if (error != 0) {
+				gctl_error(req, "Cannot read material from %s (error=%d).",
+				    name, error);
+				return;
+			}
+
+			error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, mkey, nkey);
+
+			if (error > 0) {
+				bzero(&md_raw, sizeof(md_raw));
+				gctl_error(req, "Cannot decrypt Master Key for %s (error=%d).",pp->name, error);
+				return;
+			}
+			bzero(keymaterial, sizeof(*keymaterial));
+			free(keymaterial,M_LUKS);
 		}
-
-		error = g_luks_mkey_decrypt_raw(&md_raw, &md, keymaterial, passphrase, mkey, 0);
-
-		bzero(keymaterial, sizeof(*keymaterial));
-		free(keymaterial, M_LUKS);
-
-		if (error == 0)
-			break;
+		nkey++;
 	}
-
 	bzero(passphrase, sizeof(*passphrase));
-
 	if (error == -1) {
 		bzero(&md_raw, sizeof(md_raw));
 		gctl_error(req, "Wrong passphrase for %s.", pp->name);
 		return;
-	} else if (error > 0) {
-		bzero(&md_raw, sizeof(md_raw));
-		gctl_error(req, "Cannot decrypt Master Key for %s (error=%d).",
-		    pp->name, error);
-		return;
 	}
-	G_LUKS_DEBUG(1, "Using Master Key %u for %s.", 0 , pp->name);
+	G_LUKS_DEBUG(1, "Using Master Key %u for %s.", nkey , pp->name);
 
 	if (*detach && *readonly) {
 		bzero(&md_raw, sizeof(md_raw));
