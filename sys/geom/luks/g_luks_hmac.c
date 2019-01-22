@@ -128,6 +128,7 @@ g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
     size_t size)
 {
 	uint8_t off[8];
+	bzero(off,sizeof(off));
 
 	switch (sc->sc_aalgo) {
 	case G_LUKS_CRYPTO_PLAIN64:
@@ -168,6 +169,7 @@ g_luks_crypto_ivgen_aalgo(u_int algo, off_t offset, u_char *iv,
     size_t size)
 {
 	uint8_t off[8];
+	bzero(off,sizeof(off));
 
 	switch (algo) {
 	case G_LUKS_CRYPTO_PLAIN64:
