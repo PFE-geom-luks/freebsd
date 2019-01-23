@@ -1217,7 +1217,8 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 		gctl_error(req, "No '%s' argument.", "passphrase");
 		return;
 	}
-
+	nkey=0;
+	error=-1;
 	while (nkey<LUKS_NUMKEYS && error != 0){
 
 		if(md_raw.md_keyslot[nkey].active == LUKS_KEY_ENABLED){
@@ -1244,6 +1245,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 		}
 		nkey++;
 	}
+	nkey--;
 	bzero(passphrase, sizeof(*passphrase));
 	if (error == -1) {
 		bzero(&md_raw, sizeof(md_raw));
