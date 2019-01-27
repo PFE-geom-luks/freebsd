@@ -202,11 +202,15 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 
 		for (i=0;i<keymaterial_blocks;i++)
 		{
-			SHA256_CTX *ivctx;
+			SHA256_CTX ivctx;
 			uint8_t ivkey[G_LUKS_IVKEYLEN];
 
+			bzero(&ivctx, sizeof(ivctx));
 			bcopy(mkey, ivkey, sizeof(ivkey));
-			ivctx = malloc(sizeof(*ivctx), M_LUKS, M_WAITOK | M_ZERO);
+
+//			printf("ivkey: ");
+//			hexprint(ivkey, G_LUKS_IVKEYLEN, " ");
+//			printf("\n");
 
 			/*
 			 * Precalculate SHA256 for IV generation.
@@ -214,14 +218,17 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 			 * every access to sector, so now will be much better.
 			 */
 			if (md->md_aalgo == G_LUKS_CRYPTO_ESSIV_SHA256) {
-				SHA256_Init(ivctx);
-				SHA256_Update(ivctx, ivkey, sizeof(ivkey));
+				SHA256_Init(&ivctx);
+				SHA256_Update(&ivctx, ivkey, sizeof(ivkey));
 			}
+
+//			printf("ivctx: ");
+//			hexprint(ivctx->buf, SHA256_BLOCK_LENGTH, " ");
+//			printf("\n");
 
 			error = g_luks_crypto_decrypt_iv(md->md_ealgo, md->md_aalgo, ivctx, keymaterial+i*LUKS_SECTOR_SIZE,LUKS_SECTOR_SIZE, dkey, i, md_raw->md_keybytes*8);
 
-			bzero(ivctx, sizeof(*ivctx));
-			free(ivctx, M_LUKS);
+			bzero(&ivctx, sizeof(ivctx));
 
 			if (error != 0) {
 				return (error);
@@ -329,10 +336,17 @@ g_luks_mkey_propagate(struct g_luks_softc *sc, const unsigned char *mkey)
 	 * This is expensive operation and we can do it only once now or for
 	 * every access to sector, so now will be much better.
 	 */
-	if (sc->sc_aalgo == G_LUKS_CRYPTO_ESSIV_SHA256) {
+//	if (sc->sc_aalgo == G_LUKS_CRYPTO_ESSIV_SHA256) {
 		SHA256_Init(&sc->sc_ivctx);
 		SHA256_Update(&sc->sc_ivctx, sc->sc_ivkey,
 		    sizeof(sc->sc_ivkey));
-	}
+
+		printf("PROPAGATE ivkey: ");
+		hexprint(sc->sc_ivkey, G_LUKS_IVKEYLEN, " ");
+		printf("\n");
+		printf("PROPAGATE ivctx: ");
+		hexprint(sc->sc_ivctx.buf, SHA256_BLOCK_LENGTH, " ");
+		printf("\n");
+//	}
 }
 #endif

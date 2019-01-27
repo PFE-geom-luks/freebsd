@@ -56,7 +56,7 @@ g_luks_crypto_done(struct cryptop *crp)
 }
 
 int
-g_luks_crypto_decrypt_iv(u_int ealgo, u_int aalgo, SHA256_CTX *ivctx, u_char *data,
+g_luks_crypto_decrypt_iv(u_int ealgo, u_int aalgo, SHA256_CTX ivctx, u_char *data,
 	size_t datasize, const u_char *key, uint64_t sector, size_t keysize)
 {
 	struct cryptoini cri;

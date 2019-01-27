@@ -124,11 +124,16 @@ g_luks_crypto_hmac(const uint8_t *hkey, size_t hkeysize, const uint8_t *data,
  * Here we generate IV. It is unique for every sector.
  */
 void
-g_luks_crypto_ivgen_aalgo(u_int mode, SHA256_CTX *ivctx, off_t offset,
+g_luks_crypto_ivgen_aalgo(u_int mode, SHA256_CTX ivctx, off_t offset,
 	u_char *iv, size_t size)
 {
 	uint8_t off[8];
 	bzero(off,sizeof(off));
+
+	printf("SECTOR: %ld\n", offset);
+	printf("ivctx: ");
+	hexprint(ivctx.buf, SHA256_BLOCK_LENGTH, " ");
+	printf("\n");
 
 	switch (mode) {
 	case G_LUKS_CRYPTO_PLAIN64:
@@ -153,6 +158,11 @@ g_luks_crypto_ivgen_aalgo(u_int mode, SHA256_CTX *ivctx, off_t offset,
 			SHA256_Update(&ctx, off, sizeof(off));
 			SHA256_Final(hash, &ctx);
 			bcopy(hash, iv, MIN(sizeof(hash), size));
+
+			printf("iv   : ");
+			hexprint(hash, SHA256_DIGEST_LENGTH, " ");
+			printf("\n");
+
 			break;
 		}
 	default:
@@ -166,5 +176,6 @@ void
 g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
     size_t size)
 {
-	g_luks_crypto_ivgen_aalgo(sc->sc_aalgo, &sc->sc_ivctx, offset, iv, size);
+	printf("NO AALGO\n");
+	g_luks_crypto_ivgen_aalgo(sc->sc_aalgo, sc->sc_ivctx, offset, iv, size);
 }
