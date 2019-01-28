@@ -130,11 +130,6 @@ g_luks_crypto_ivgen_aalgo(u_int mode, SHA256_CTX ivctx, off_t offset,
 	uint8_t off[8];
 	bzero(off,sizeof(off));
 
-	printf("SECTOR: %ld\n", offset);
-	printf("ivctx: ");
-	hexprint(ivctx.buf, SHA256_BLOCK_LENGTH, " ");
-	printf("\n");
-
 	switch (mode) {
 	case G_LUKS_CRYPTO_PLAIN64:
 		le64enc(off, (uint64_t)offset);
@@ -159,14 +154,9 @@ g_luks_crypto_ivgen_aalgo(u_int mode, SHA256_CTX ivctx, off_t offset,
 			SHA256_Final(hash, &ctx);
 			bcopy(hash, iv, MIN(sizeof(hash), size));
 
-			printf("iv   : ");
-			hexprint(hash, SHA256_DIGEST_LENGTH, " ");
-			printf("\n");
-
 			break;
 		}
 	default:
-		// TODO: handle the case with aes-cbc-plain
 		// assert(0); // ???
 		break;
 	}
@@ -176,6 +166,5 @@ void
 g_luks_crypto_ivgen(struct g_luks_softc *sc, off_t offset, u_char *iv,
     size_t size)
 {
-	printf("NO AALGO\n");
 	g_luks_crypto_ivgen_aalgo(sc->sc_aalgo, sc->sc_ivctx, offset, iv, size);
 }
