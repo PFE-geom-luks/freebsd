@@ -129,6 +129,7 @@ g_luks_crypto_ivgen_aalgo(u_int mode, SHA256_CTX *ivctx, off_t offset,
 {
 	uint8_t off[8];
 	bzero(off,sizeof(off));
+	bzero(iv,size);
 
 	switch (mode) {
 	case G_LUKS_CRYPTO_PLAIN64:

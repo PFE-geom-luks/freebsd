@@ -170,6 +170,8 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 	unsigned char *dkey = malloc(md_raw->md_keybytes);
 	char *digest = malloc(SHA512_MDLEN);
 #endif
+	bzero(dkey,md_raw->md_keybytes);
+	bzero(digest,SHA512_MDLEN);
 	switch(g_luks_hashstr2aalgo(md_raw->md_hashspec)){
 	case CRYPTO_SHA1_HMAC:
 
@@ -195,10 +197,7 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 		}
 
 
-
-	case CRYPTO_RIPEMD160_HMAC:
-	case CRYPTO_SHA2_256_HMAC:
-		pkcs5v2_genkey_sha256(dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
+		pkcs5v2_genkey_sha1(dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
 
 		for (i=0;i<keymaterial_blocks;i++)
 		{
@@ -231,7 +230,52 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 
 		af_merge(keymaterial,dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes,md_raw->md_hashspec);
 
+		pkcs5v2_genkey_sha1(digest,SHA512_MDLEN,md_raw->md_mkdigestsalt,LUKS_SALTSIZE,dkey,md_raw->md_iterations);
+		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
+			error = -1;
+		}else{
+			bcopy(dkey,mkey,md_raw->md_keybytes);
+		}
+
+	case CRYPTO_RIPEMD160_HMAC:
+	case CRYPTO_SHA2_256_HMAC:
+		pkcs5v2_genkey_sha256(dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
+
+		for (i=0;i<keymaterial_blocks;i++)
+		{
+			SHA256_CTX *ivctx;
+			uint8_t ivkey[G_LUKS_IVKEYLEN];
+
+			bcopy(mkey, ivkey, sizeof(ivkey));
+			ivctx = malloc(sizeof(*ivctx), M_LUKS, M_WAITOK | M_ZERO);
+
+			/*
+			 * Precalculate SHA256 for IV generation.
+			 * This is expensive operation and we can do it only once now or for
+			 * every access to sector, so now will be much better.
+			 */
+			if (md->md_aalgo == G_LUKS_CRYPTO_ESSIV_SHA256) {
+				SHA256_Init(ivctx);
+				SHA256_Update(ivctx, ivkey, sizeof(ivkey));
+			}
+
+			error = g_luks_crypto_decrypt_iv(md->md_ealgo, md->md_aalgo, ivctx, keymaterial+i*LUKS_SECTOR_SIZE,LUKS_SECTOR_SIZE, dkey, i, md_raw->md_keybytes*8);
+
+			bzero(ivctx, sizeof(*ivctx));
+			free(ivctx, M_LUKS);
+
+			/* if (error != 0) {
+				return (error);
+			}*/
+		}
+		bzero(dkey,md_raw->md_keybytes);
+
+		af_merge(keymaterial,dkey,md_raw->md_keybytes,md_raw->md_keyslot[nkey].stripes,md_raw->md_hashspec);
+		hexprint(dkey,md_raw->md_keybytes," ");
+		printf("\n");
 		pkcs5v2_genkey_sha256(digest,SHA512_MDLEN,md_raw->md_mkdigestsalt,LUKS_SALTSIZE,dkey,md_raw->md_iterations);
+		hexprint(digeset,SHA512_MDLEN," ");
+		printf("\n");
 		if (memcmp(digest,md_raw->md_mkdigest,LUKS_DIGESTSIZE) != 0){
 			error = -1;
 		}else{
@@ -241,14 +285,14 @@ g_luks_mkey_decrypt_raw(const struct g_luks_metadata_raw *md_raw,
 		pkcs5v2_genkey(dkey,sizeof(*dkey),md_raw->md_keyslot[nkey].salt,LUKS_SALTSIZE,passphrase,md_raw->md_keyslot[nkey].iterations);
 	}
 
-	//bzero(dkey,sizeof(*dkey));
+	bzero(dkey,sizeof(*dkey));
 	bzero(digest,sizeof(*digest));
 
 #ifdef _KERNEL
-	//free(dkey,M_LUKS);
+	free(dkey,M_LUKS);
 	free(digest,M_LUKS);
 #else
-	//free(dkey);
+	free(dkey);
 	free(digest);
 #endif
 	return error;

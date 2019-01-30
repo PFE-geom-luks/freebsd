@@ -60,7 +60,7 @@ g_luks_ctl_attach(struct gctl_req *req, struct g_class *mp)
 	u_char *key, mkey[G_LUKS_DATAIVKEYLEN];
 	int *nargs, *detach, *readonly;
 	int keysize, error;
-	u_int nkey;
+	u_int nkey=0;
 
 	g_topology_assert();
 
@@ -1228,6 +1228,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 			char *keymaterial = malloc(splitted_key_length,M_LUKS,M_WAITOK);
 			error = g_luks_read_keymaterial(mp,pp,md_raw.md_keyslot[nkey].keymaterialoffset,splitted_key_length,keymaterial);
 			if (error != 0) {
+				free(keymaterial,M_LUKS);
 				gctl_error(req, "Cannot read material from %s (error=%d).",
 				    name, error);
 				return;
@@ -1237,6 +1238,7 @@ g_luks_ctl_test_passphrase(struct gctl_req *req, struct g_class *mp)
 
 			if (error > 0) {
 				bzero(&md_raw, sizeof(md_raw));
+				free(keymaterial,M_LUKS);
 				gctl_error(req, "Cannot decrypt Master Key for %s (error=%d).",pp->name, error);
 				return;
 			}
