@@ -1200,7 +1200,7 @@ g_luks_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
                         u_char dkey[G_LUKS_USERKEYLEN];
 
                         pkcs5v2_genkey(dkey, sizeof(dkey), md.md_salt,
-                            sizeof(md.md_salt), passphrase, md.md_iterations);
+                            sizeof(md.md_salt), passphrase, strlen(passphrase),md.md_iterations);
                         bzero(passphrase, sizeof(passphrase));
                         g_luks_crypto_hmac_update(&ctx, dkey, sizeof(dkey));
                         explicit_bzero(dkey, sizeof(dkey));

@@ -551,7 +551,7 @@ luks_genkey_passphrase(struct gctl_req *req, struct g_luks_metadata *md, bool ne
 		unsigned char dkey[G_LUKS_USERKEYLEN];
 
 		pkcs5v2_genkey(dkey, sizeof(dkey), md->md_salt,
-		    sizeof(md->md_salt), passbuf, md->md_iterations);
+		    sizeof(md->md_salt), passbuf, strlen(passbuf), md->md_iterations);
 		g_luks_crypto_hmac_update(ctxp, dkey, sizeof(dkey));
 		bzero(dkey, sizeof(dkey));
 	}

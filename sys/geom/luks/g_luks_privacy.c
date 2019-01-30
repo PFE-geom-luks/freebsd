@@ -308,7 +308,6 @@ g_luks_crypto_run(struct g_luks_worker *wr, struct bio *bp)
 		g_luks_crypto_ivgen(sc, dstoff/secsize, crd->crd_iv,
 		    sizeof(crd->crd_iv));
 
-		G_LUKS_DEBUG(1,"dstoff : %ld, keylen : %d",dstoff,crd->crd_klen);
 		crd->crd_next = NULL;
 
 		crp->crp_etype = 0;
